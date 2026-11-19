@@ -13,8 +13,10 @@ import { useState, type ReactNode } from 'react'
 import { LabelDialog } from '../features/labels/LabelDialog'
 import { NewProjectForm } from '../features/projects/NewProjectForm'
 import { ProjectDialog } from '../features/projects/ProjectDialog'
+import { AccountPanel } from '../features/sync/AccountPanel'
 import { strings } from '../i18n'
 import { useActions, useApp, useLabels, useListedNotes, useProjects } from '../store/hooks'
+import { useSessionStore } from '../store/sessionContext'
 import { Logo } from '../ui/Logo'
 import { sectionTitleClass } from '../ui/styles'
 import { STATUS_SOLID, TAG_SOLID } from '../ui/theme'
@@ -40,6 +42,7 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
   const labels = useLabels()
   const statusFilter = useApp((state) => state.statusFilter)
   const labelFilter = useApp((state) => state.labelFilter)
+  const session = useSessionStore()
 
   const [editedProject, setEditedProject] = useState<Project | null>(null)
   const [editedLabel, setEditedLabel] = useState<Label | null>(null)
@@ -175,10 +178,14 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
       </ul>
 
       <div className="mt-auto pt-6">
-        <div className="border-t border-divider px-3 pt-4">
-          <p className="text-sm font-semibold text-fg">{strings.demo.title}</p>
-          <p className="mt-0.5 font-mono text-xs text-fg-muted">{strings.demo.hint}</p>
-        </div>
+        {session ? (
+          <AccountPanel />
+        ) : (
+          <div className="border-t border-divider px-3 pt-4">
+            <p className="text-sm font-semibold text-fg">{strings.demo.title}</p>
+            <p className="mt-0.5 font-mono text-xs text-fg-muted">{strings.demo.hint}</p>
+          </div>
+        )}
       </div>
 
       {editedProject && (

@@ -3,8 +3,8 @@ import { Logo } from '../ui/Logo'
 import { primaryButtonClass } from '../ui/styles'
 
 /**
- * Shown without `?demo=1` until Google sign-in is built at stage 2:
- * there is no storage to work with yet, so the page only leads to the demo.
+ * Shown without `?demo=1` when the build has no Google keys (a fresh checkout
+ * without `.env.local`): there is no storage to work with, so it leads to the demo.
  */
 export function Welcome() {
   return (

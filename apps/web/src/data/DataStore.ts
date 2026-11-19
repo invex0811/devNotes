@@ -28,4 +28,10 @@ export interface DataStore {
   /** Creates the project's own storage (a spreadsheet, for Google) and returns the project. */
   createProject(name: string): Promise<Project>
   updateProject(project: Project): Promise<void>
+
+  /**
+   * Stores that sync in the background (Google) call the listener with fresh data
+   * after reading the spreadsheets. Returns the unsubscribe function.
+   */
+  subscribe?(listener: (snapshot: DataSnapshot) => void): () => void
 }
