@@ -2,6 +2,7 @@ import {
   activeProjects,
   allLabels,
   listedNotes,
+  reviewNotes,
   selectNotes,
   type Label,
   type Note,
@@ -71,4 +72,11 @@ export function useProjectName(): (projectId: string | null) => string {
       projects.find((project) => project.id === projectId)?.name ?? strings.project.none,
     [projects],
   )
+}
+
+/** AI cards waiting for review, newest first. */
+export function useReviewNotes(): Note[] {
+  const notes = useApp((state) => state.notes)
+  const projects = useApp((state) => state.projects)
+  return useMemo(() => reviewNotes(notes, projects), [notes, projects])
 }

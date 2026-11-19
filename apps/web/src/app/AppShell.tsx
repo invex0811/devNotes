@@ -1,7 +1,8 @@
 import { isSharedProject, type Note, type Scope } from '@devnotes/core'
-import { Copy, Menu, TriangleAlert, UserPlus } from 'lucide-react'
+import { ClipboardPaste, Copy, Menu, TriangleAlert, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { CopyForAiDialog } from '../features/ai-copy/CopyForAiDialog'
+import { PasteFromAiDialog } from '../features/ai-import/PasteFromAiDialog'
 import { Board } from '../features/board/Board'
 import { ViewSwitch } from '../features/board/ViewSwitch'
 import { DeleteToast } from '../features/notes/DeleteToast'
@@ -9,6 +10,7 @@ import { NoteDialog } from '../features/notes/NoteDialog'
 import { NoteGrid } from '../features/notes/NoteGrid'
 import { ShareDialog } from '../features/projects/ShareDialog'
 import { QuickAdd } from '../features/quick-add/QuickAdd'
+import { ReviewPage } from '../features/review/ReviewPage'
 import { SearchField } from '../features/search/SearchField'
 import { SelectionBar } from '../features/selection/SelectionBar'
 import { SessionBanner } from '../features/sync/SessionBanner'
@@ -29,6 +31,8 @@ function scopeTitle(scope: Scope, projectName: string | undefined): string {
       return strings.nav.inbox
     case 'archive':
       return strings.nav.archive
+    case 'review':
+      return strings.nav.review
     case 'project':
       return projectName ?? strings.nav.all
   }
@@ -43,6 +47,7 @@ export function AppShell() {
   const [sharing, setSharing] = useState(false)
   /** The notes the "Copy for AI" dialog was opened with; null when it is closed. */
   const [aiNotes, setAiNotes] = useState<Note[] | null>(null)
+  const [pasting, setPasting] = useState(false)
   const actions = useActions()
   const view = useApp((state) => state.view)
   const selectedIds = useApp((state) => state.selectedIds)
@@ -120,12 +125,24 @@ export function AppShell() {
               <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
                 {scopeTitle(scope, project?.name)}
               </h1>
-              {view === 'board' && <p className="text-sm text-fg-muted">{strings.board.hint}</p>}
+              {view === 'board' && scope.kind !== 'review' && (
+                <p className="text-sm text-fg-muted">{strings.board.hint}</p>
+              )}
             </div>
           </div>
           <SearchField />
           <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <ViewSwitch />
+            <button
+              type="button"
+              onClick={() => {
+                setPasting(true)
+              }}
+              className={`${secondaryButtonClass} gap-2`}
+            >
+              <ClipboardPaste aria-hidden="true" size={18} />
+              {strings.aiImport.button}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -171,13 +188,15 @@ export function AppShell() {
               </div>
             </section>
           )}
-          {scope.kind !== 'archive' && (
+          {scope.kind === 'review' && <ReviewPage />}
+          {scope.kind !== 'archive' && scope.kind !== 'review' && (
             <QuickAdd
               key={scopeKey(scope)}
               defaultProjectId={scope.kind === 'project' ? scope.projectId : null}
             />
           )}
-          {view === 'board' ? <Board scope={scope} /> : <NoteGrid scope={scope} />}
+          {scope.kind !== 'review' &&
+            (view === 'board' ? <Board scope={scope} /> : <NoteGrid scope={scope} />)}
         </main>
       </div>
 
@@ -186,6 +205,18 @@ export function AppShell() {
           project={project}
           onClose={() => {
             setSharing(false)
+          }}
+        />
+      )}
+      {pasting && (
+        <PasteFromAiDialog
+          defaultProjectId={scope.kind === 'project' ? scope.projectId : null}
+          onClose={() => {
+            setPasting(false)
+          }}
+          onAdded={() => {
+            setPasting(false)
+            navigate({ kind: 'review' })
           }}
         />
       )}

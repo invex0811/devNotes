@@ -1,4 +1,5 @@
 import {
+  LABEL_COLORS,
   allLabels,
   applyBugRules,
   applyNotePatch,
@@ -12,6 +13,7 @@ import {
   toggleLabel,
   validateLabelName,
   validateProjectName,
+  type AiImportNote,
   type CustomLabel,
   type LabelColor,
   type LabelNameError,
@@ -67,6 +69,19 @@ export interface AppActions {
   toggleNoteLabel: (id: string, label: string) => void
   toggleChecklistItem: (id: string, line: number) => void
   deleteNote: (id: string) => void
+  /** Deletes several notes softly with one "Undo". */
+  deleteNotes: (ids: string[]) => void
+  /**
+   * Saves cards from an AI answer for review (`source=ai_paste`, `review=pending`)
+   * and creates the labels they need. Returns how many cards were added.
+   */
+  importAiNotes: (
+    notes: readonly AiImportNote[],
+    newLabels: readonly string[],
+    projectId: string | null,
+  ) => number
+  /** Accepts AI cards: they leave review and become ordinary notes. */
+  acceptReview: (ids: string[]) => void
   /** Changes the status, as dragging a card to another board column does. */
   setStatus: (id: string, status: NoteStatus) => void
   undoDelete: () => void
@@ -229,6 +244,38 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
       deleteNote(id) {
         deleteNotes([id])
+      },
+
+      deleteNotes,
+
+      importAiNotes(cards, newLabels, projectId) {
+        const existing = allLabels(get().customLabels)
+        let colorIndex = get().customLabels.length
+        for (const name of newLabels) {
+          if (existing.some((label) => isSameLabel(label.name, name))) continue
+          const color = LABEL_COLORS[colorIndex % LABEL_COLORS.length] ?? 'gray'
+          colorIndex += 1
+          actions.createLabel(name, color)
+        }
+        const time = now()
+        const created = cards.map((card) =>
+          applyBugRules(null, {
+            ...createNote({ id: newId(), now: time, title: card.title, projectId }),
+            body: card.body,
+            labels: [...card.labels],
+            status: card.status,
+            solution: card.solution,
+            source: 'ai_paste',
+            review: 'pending',
+          }),
+        )
+        set({ notes: [...get().notes, ...created] })
+        for (const note of created) persist(dataStore.createNote(note))
+        return created.length
+      },
+
+      acceptReview(ids) {
+        for (const id of ids) patchNote(id, { review: null })
       },
 
       setStatus(id, status) {
