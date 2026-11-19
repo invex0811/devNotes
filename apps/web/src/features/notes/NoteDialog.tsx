@@ -6,7 +6,12 @@ import { useActions, useApp, useLabels, useProjects } from '../../store/hooks'
 import { LabelBadge } from '../../ui/LabelBadge'
 import { Modal } from '../../ui/Modal'
 import { StatusPill } from '../../ui/StatusPill'
-import { dangerButtonClass, iconButtonClass, secondaryButtonClass } from '../../ui/styles'
+import {
+  dangerButtonClass,
+  iconButtonClass,
+  secondaryButtonClass,
+  touchTargetClass,
+} from '../../ui/styles'
 import { NOTE_SURFACE, TAG_TEXT, TAG_TINT } from '../../ui/theme'
 import { formatNoteDate } from './formatDate'
 import { labelColor } from './labelColor'
@@ -47,7 +52,7 @@ function NoteDialogContent({ note }: { note: Note }) {
               onChange={(event) => {
                 patch({ projectId: event.target.value === NO_PROJECT ? null : event.target.value })
               }}
-              className="min-w-0 appearance-none truncate bg-page py-2 text-[15px] font-semibold text-fg"
+              className="min-h-11 min-w-0 appearance-none truncate bg-page text-[15px] font-semibold text-fg"
             >
               <option value={NO_PROJECT}>{strings.project.none}</option>
               {projects.map((project) => (
@@ -86,15 +91,21 @@ function NoteDialogContent({ note }: { note: Note }) {
           </button>
         </div>
 
-        <input
+        {/* A text area that grows, so a long title wraps instead of being cut on a phone.
+            A title is one line: Enter adds no line break and pasted ones become spaces. */}
+        <textarea
           value={note.title}
           onChange={(event) => {
-            patch({ title: event.target.value })
+            patch({ title: event.target.value.replace(/\s*\n\s*/g, ' ') })
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.preventDefault()
           }}
           aria-label={strings.note.titleLabel}
           placeholder={strings.note.titlePlaceholder}
           maxLength={200}
-          className="mt-5 w-full rounded-sm bg-transparent text-2xl font-bold tracking-tight text-fg placeholder:text-fg-muted"
+          rows={1}
+          className="mt-5 field-sizing-content min-h-11 w-full resize-none rounded-sm bg-transparent text-2xl leading-snug font-bold tracking-tight text-fg placeholder:text-fg-muted"
         />
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -113,7 +124,7 @@ function NoteDialogContent({ note }: { note: Note }) {
             onClick={() => {
               setLabelsOpen(!labelsOpen)
             }}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-line px-2 text-[13px] text-fg-secondary hover:border-fg-muted hover:text-fg"
+            className={`${touchTargetClass} inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-line px-2 text-[13px] text-fg-secondary hover:border-fg-muted hover:text-fg`}
           >
             <Plus aria-hidden="true" size={14} />
             {strings.note.addLabel}
@@ -216,7 +227,11 @@ function NoteDialogContent({ note }: { note: Note }) {
           <fieldset className="flex items-center gap-2">
             <legend className="sr-only">{strings.note.colorLabel}</legend>
             {NOTE_COLORS.map((color) => (
-              <label key={color} title={strings.note.colors[color]} className="cursor-pointer">
+              <label
+                key={color}
+                title={strings.note.colors[color]}
+                className={`${touchTargetClass} cursor-pointer`}
+              >
                 <input
                   type="radio"
                   name="note-color"

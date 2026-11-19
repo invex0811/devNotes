@@ -36,7 +36,7 @@ const rowClass =
 const activeRowClass = 'bg-card font-semibold'
 const countClass = 'ml-auto font-mono text-xs font-normal text-fg-muted'
 const editButtonClass =
-  'absolute top-1/2 right-9 flex size-8 -translate-y-1/2 items-center justify-center rounded-control text-fg-muted opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100 pointer-coarse:opacity-100'
+  'absolute top-1/2 right-9 flex size-8 -translate-y-1/2 pointer-coarse:size-11 items-center justify-center rounded-control text-fg-muted opacity-0 group-hover:opacity-100 hover:text-fg focus-visible:opacity-100 pointer-coarse:opacity-100'
 
 interface SidebarProps {
   scope: Scope

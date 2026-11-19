@@ -1,4 +1,5 @@
 import { findLabel, parseQuickInput } from '@devnotes/core'
+import { Plus } from 'lucide-react'
 import { useState, type SyntheticEvent } from 'react'
 import { strings } from '../../i18n'
 import { useActions, useLabels } from '../../store/hooks'
@@ -44,19 +45,24 @@ export function QuickAdd({ defaultProjectId }: { defaultProjectId: string | null
           autoComplete="off"
           className={fieldClass}
         />
-        <button type="submit" className={primaryButtonClass}>
-          {strings.quickAdd.add}
+        <button
+          type="submit"
+          aria-label={strings.quickAdd.add}
+          className={`${primaryButtonClass} shrink-0 max-sm:w-11 max-sm:px-0`}
+        >
+          <Plus aria-hidden="true" size={22} className="sm:hidden" />
+          <span className="max-sm:hidden">{strings.quickAdd.add}</span>
         </button>
       </div>
 
-      <div className="mt-3">
+      <div className={`mt-3 ${text === '' ? 'max-md:hidden' : ''}`}>
         <ProjectChoice name="quick-add-project" value={projectId} onChange={setProjectId} />
       </div>
 
       <p
         id="quick-add-hint"
         aria-live="polite"
-        className="mt-3 flex min-h-7 flex-wrap items-center gap-2 text-sm text-fg-muted"
+        className={`mt-3 flex min-h-7 flex-wrap items-center gap-2 text-sm text-fg-muted ${text === '' ? 'max-md:hidden' : ''}`}
       >
         {label ? (
           <>

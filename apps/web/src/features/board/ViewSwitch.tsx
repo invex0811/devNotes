@@ -9,14 +9,14 @@ const VIEWS: { view: NotesView; icon: typeof LayoutGrid }[] = [
 ]
 
 /** "Сетка / Доска" switch in the header. */
-export function ViewSwitch() {
+export function ViewSwitch({ className = '' }: { className?: string }) {
   const view = useApp((state) => state.view)
   const actions = useActions()
   return (
     <div
       role="group"
       aria-label={strings.view.label}
-      className="inline-flex shrink-0 overflow-hidden rounded-control border border-line bg-panel"
+      className={`inline-flex shrink-0 overflow-hidden rounded-control border border-line bg-panel ${className}`}
     >
       {VIEWS.map(({ view: option, icon: Icon }) => (
         <button
@@ -26,7 +26,7 @@ export function ViewSwitch() {
           onClick={() => {
             actions.setView(option)
           }}
-          className={`inline-flex min-h-11 items-center gap-2 px-4 text-[15px] font-semibold ${view === option ? 'bg-card text-fg' : 'text-fg-muted hover:text-fg'}`}
+          className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 px-4 text-[15px] font-semibold ${view === option ? 'bg-card text-fg' : 'text-fg-muted hover:text-fg'}`}
         >
           <Icon aria-hidden="true" size={16} />
           {strings.view[option]}

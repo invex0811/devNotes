@@ -9,7 +9,7 @@ Claude Code всегда попадают в «На проверку» на са
 
 ## 1. OAuth-клиент «Desktop app»
 
-Делается один раз, в том же проекте Google Cloud, что и сайт (шаги 1–7 из
+Делается один раз, в том же проекте Google Cloud, что и сайт (шаги 0–8 из
 [SETUP_GOOGLE.md](SETUP_GOOGLE.md) уже выполнены).
 
 1. Откройте https://console.cloud.google.com/auth/clients и проверьте, что вверху выбран
@@ -78,8 +78,11 @@ node packages/mcp/dist/index.js check
 `packages/mcp/dist/index.js` в вашей копии репозитория:
 
 ```bash
-claude mcp add --transport stdio --scope user devnotes -- node D:/DevNotes/devnotes/packages/mcp/dist/index.js
+claude mcp add --transport stdio --scope user devnotes -- node /полный/путь/к/devnotes/packages/mcp/dist/index.js
 ```
+
+На Windows путь пишется с прямыми слэшами, например
+`node D:/Projects/devnotes/packages/mcp/dist/index.js`.
 
 Только для текущего проекта — без `--scope user` (по умолчанию `local`).
 

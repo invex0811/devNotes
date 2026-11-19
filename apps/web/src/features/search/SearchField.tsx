@@ -3,7 +3,7 @@ import { strings } from '../../i18n'
 import { useActions, useApp } from '../../store/hooks'
 
 /** Searches title, text and solution inside the current scope as the user types. */
-export function SearchField() {
+export function SearchField({ autoFocus = false }: { autoFocus?: boolean }) {
   const query = useApp((state) => state.query)
   const actions = useActions()
 
@@ -21,6 +21,7 @@ export function SearchField() {
           actions.setQuery(event.target.value)
         }}
         aria-label={strings.search.label}
+        autoFocus={autoFocus}
         placeholder={strings.search.placeholder}
         className="min-h-11 w-full rounded-control border border-line bg-panel pr-10 pl-9 text-[15px] text-fg placeholder:text-fg-muted [&::-webkit-search-cancel-button]:hidden"
       />

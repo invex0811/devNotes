@@ -17,3 +17,10 @@ export const iconButtonClass =
 
 export const sectionTitleClass =
   'px-3 font-mono text-[11px] font-medium tracking-[0.12em] text-fg-muted uppercase'
+
+/**
+ * Widens the area that takes taps to at least 44 × 44 px without changing how a
+ * small control looks: an invisible box centred on it.
+ */
+export const touchTargetClass =
+  "relative after:absolute after:top-1/2 after:left-1/2 after:size-11 after:min-h-full after:min-w-full after:-translate-1/2 after:content-['']"

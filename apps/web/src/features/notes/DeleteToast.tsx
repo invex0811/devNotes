@@ -23,7 +23,7 @@ export function DeleteToast() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4"
+      className="pointer-events-none fixed inset-x-0 bottom-20 z-40 md:bottom-5 flex justify-center px-4"
     >
       {toast && (
         <div className="pointer-events-auto flex items-center gap-4 rounded-control border border-line bg-card py-1.5 pr-1.5 pl-4 text-[15px] text-fg shadow-lg">
