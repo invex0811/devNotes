@@ -156,12 +156,14 @@ export class SyncEngine {
 
   /**
    * Reads all spreadsheets (one `values.batchGet` each) and merges them into the
-   * cache. Throws AuthError or TransientError so callers can tell the user.
+   * cache; with a project id, only that project's spreadsheet (an open shared
+   * project is re-read every minute). Throws AuthError or TransientError so
+   * callers can tell the user.
    */
-  refresh(): Promise<void> {
+  refresh(onlyProjectId?: string): Promise<void> {
     return this.exclusive(async () => {
       try {
-        await this.readAll()
+        await this.readAll(onlyProjectId)
       } catch (error) {
         this.handleError(error)
         throw error
@@ -379,25 +381,35 @@ export class SyncEngine {
     return index
   }
 
-  private async readAll(): Promise<void> {
-    const [, notesRows = [], labelRows = [], projectRows = []] = await this.api.getValues(
-      this.home,
-      ['meta', 'notes', 'labels', 'projects'],
+  private async readAll(onlyProjectId?: string): Promise<void> {
+    const full = onlyProjectId === undefined
+    const read: SpreadsheetData[] = []
+    let projects: Project[]
+
+    if (full) {
+      const [, notesRows = [], labelRows = [], projectRows = []] = await this.api.getValues(
+        this.home,
+        ['meta', 'notes', 'labels', 'projects'],
+      )
+      this.storeIndex(this.home, 'notes', notesRows)
+      this.storeIndex(this.home, 'labels', labelRows)
+      this.storeIndex(this.home, 'projects', projectRows)
+      const projectHeader = readHeader(projectRows[0])
+      projects = projectRows
+        .slice(1)
+        .map((row) => rowToProject(row, projectHeader))
+        .filter((project): project is Project => project !== null)
+      read.push({ spreadsheetId: this.home, projectId: null, notesRows, labelRows })
+    } else {
+      projects = await this.db.projects.toArray()
+    }
+
+    const sharedFiles = full ? await this.sharedFiles() : null
+    const targets = projects.filter(
+      (project) => !project.removed && (full || project.id === onlyProjectId),
     )
-    this.storeIndex(this.home, 'notes', notesRows)
-    this.storeIndex(this.home, 'labels', labelRows)
-    this.storeIndex(this.home, 'projects', projectRows)
-
-    const projectHeader = readHeader(projectRows[0])
-    const projects = projectRows
-      .slice(1)
-      .map((row) => rowToProject(row, projectHeader))
-      .filter((project): project is Project => project !== null)
-
-    const read: SpreadsheetData[] = [
-      { spreadsheetId: this.home, projectId: null, notesRows, labelRows },
-    ]
-    for (const project of projects.filter((p) => !p.removed)) {
+    const unavailable = new Set<string>()
+    for (const project of targets) {
       try {
         const [notes = [], labels = []] = await this.api.getValues(project.spreadsheetId, [
           'notes',
@@ -413,20 +425,45 @@ export class SyncEngine {
         })
       } catch (error) {
         if (error instanceof AuthError || error instanceof TransientError) throw error
-        // A deleted or closed project spreadsheet: keep its cached notes.
+        // Deleted, or access was closed: the project is marked, its cache is kept.
         console.error(`DevNotes: cannot read project "${project.name}"`, error)
+        unavailable.add(project.id)
       }
     }
 
-    await this.merge(projects, read)
+    const flagged = projects.map((project): Project => {
+      const next: Project = { ...project }
+      const shared = sharedFiles?.get(project.spreadsheetId)?.shared
+      if (sharedFiles) next.shared = shared ?? false
+      if (targets.includes(project)) next.unavailable = unavailable.has(project.id)
+      return next
+    })
+
+    await this.merge(flagged, read, full)
     for (const listener of this.changeListeners) listener()
+  }
+
+  /** Drive's `shared` flag of project spreadsheets; null when it cannot be read now. */
+  private async sharedFiles(): Promise<Map<string, { shared: boolean }> | null> {
+    try {
+      return await this.api.listProjectFiles()
+    } catch (error) {
+      if (error instanceof AuthError || error instanceof TransientError) throw error
+      console.error('DevNotes: cannot list project spreadsheets', error)
+      return null
+    }
   }
 
   /**
    * Puts what was read into the cache. Anything with unsent local edits keeps the
    * local version; everything else takes the version from the spreadsheet.
    */
-  private async merge(projects: Project[], read: SpreadsheetData[]): Promise<void> {
+  private async merge(
+    projects: Project[],
+    read: SpreadsheetData[],
+    /** The whole `projects` sheet was read: projects missing from it are gone. */
+    replaceProjects: boolean,
+  ): Promise<void> {
     const { db } = this
     await db.transaction('rw', [db.notes, db.labels, db.projects, db.queue], async () => {
       const pending = await db.queue.toArray()
@@ -442,11 +479,13 @@ export class SyncEngine {
       const remoteProjectIds = new Set(projects.map((project) => project.id))
       const localProjects = await db.projects.toArray()
       await db.projects.bulkPut(projects.filter((project) => !pendingProjects.has(project.id)))
-      await db.projects.bulkDelete(
-        localProjects
-          .filter((p) => !remoteProjectIds.has(p.id) && !pendingProjects.has(p.id))
-          .map((p) => p.id),
-      )
+      if (replaceProjects) {
+        await db.projects.bulkDelete(
+          localProjects
+            .filter((p) => !remoteProjectIds.has(p.id) && !pendingProjects.has(p.id))
+            .map((p) => p.id),
+        )
+      }
 
       // Notes
       const remote = new Map<string, Note>()

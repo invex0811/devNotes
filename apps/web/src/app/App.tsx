@@ -13,7 +13,7 @@ export function App() {
   const google = readGoogleConfig()
   // Without keys (a fresh checkout) the site can still be tried in the demo mode.
   if (!google) return <Welcome />
-  return <GoogleApp clientId={google.clientId} />
+  return <GoogleApp config={google} />
 }
 
 /** `?demo=1`: the whole app on top of an in-memory store with sample notes. */

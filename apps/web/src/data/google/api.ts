@@ -45,6 +45,15 @@ export interface GoogleApi {
   writeRanges(spreadsheetId: string, data: readonly ValueRange[]): Promise<void>
   /** `values.batchClear`. */
   clearRanges(spreadsheetId: string, ranges: readonly string[]): Promise<void>
+  /**
+   * Project spreadsheets the app can see, with Drive's `shared` flag: one
+   * `files.list` instead of a request per project.
+   */
+  listProjectFiles(): Promise<Map<string, { shared: boolean }>>
+  /** Drive `permissions.create`: role `writer` for a Google account; Google emails them. */
+  shareSpreadsheet(spreadsheetId: string, email: string): Promise<void>
+  /** Renames the spreadsheet file in Drive. */
+  renameSpreadsheet(spreadsheetId: string, title: string): Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -146,14 +155,9 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
     },
 
     async findSpreadsheet(kind) {
-      const q = [
-        `appProperties has { key='${APP_PROPERTY_KEY}' and value='${kind}' }`,
-        `mimeType='${SPREADSHEET_MIME}'`,
-        'trashed=false',
-      ].join(' and ')
       const result = await call<{ files?: { id: string }[] }>(
         `${DRIVE}/files?${query({
-          q,
+          q: filesOfKind(kind),
           spaces: 'drive',
           orderBy: 'createdTime',
           pageSize: '10',
@@ -161,6 +165,45 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
         })}`,
       )
       return result.files?.[0]?.id ?? null
+    },
+
+    async listProjectFiles() {
+      const files = new Map<string, { shared: boolean }>()
+      let pageToken: string | undefined
+      do {
+        const result = await call<{
+          files?: { id: string; shared?: boolean }[]
+          nextPageToken?: string
+        }>(
+          `${DRIVE}/files?${query({
+            q: filesOfKind('project'),
+            spaces: 'drive',
+            pageSize: '1000',
+            fields: 'nextPageToken,files(id,shared)',
+            ...(pageToken ? { pageToken } : {}),
+          })}`,
+        )
+        for (const file of result.files ?? []) files.set(file.id, { shared: file.shared ?? false })
+        pageToken = result.nextPageToken
+      } while (pageToken)
+      return files
+    },
+
+    async shareSpreadsheet(spreadsheetId, email) {
+      await post(
+        `${DRIVE}/files/${spreadsheetId}/permissions?${query({
+          sendNotificationEmail: 'true',
+          fields: 'id',
+        })}`,
+        { type: 'user', role: 'writer', emailAddress: email },
+      )
+    },
+
+    async renameSpreadsheet(spreadsheetId, title) {
+      await call(`${DRIVE}/files/${spreadsheetId}?fields=id`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: title }),
+      })
     },
 
     async createSpreadsheet(kind, title, name) {
@@ -224,6 +267,14 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
       await post(`${SHEETS}/${spreadsheetId}/values:batchClear`, { ranges })
     },
   }
+}
+
+function filesOfKind(kind: SpreadsheetKind): string {
+  return [
+    `appProperties has { key='${APP_PROPERTY_KEY}' and value='${kind}' }`,
+    `mimeType='${SPREADSHEET_MIME}'`,
+    'trashed=false',
+  ].join(' and ')
 }
 
 function toRowData(row: readonly Cell[]) {

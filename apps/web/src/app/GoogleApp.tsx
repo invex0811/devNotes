@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react'
 import { createHttpApi } from '../data/google/api'
 import { CacheDb } from '../data/google/cache'
+import type { GoogleConfig } from '../data/google/config'
 import { createGisTokenSource } from '../data/google/gis'
+import { pickSpreadsheet } from '../data/google/picker'
 import { createGoogleSession, type SessionStore } from '../data/google/session'
 import { strings } from '../i18n'
 import { SessionContext, useSession } from '../store/sessionContext'
 import { AppRoot } from './AppRoot'
 import { SignIn } from './SignIn'
 
-function createSession(clientId: string): SessionStore {
-  const tokens = createGisTokenSource(clientId)
+function createSession(config: GoogleConfig): SessionStore {
+  const tokens = createGisTokenSource(config.clientId)
+  const { apiKey, appId } = config
   return createGoogleSession({
     tokens,
+    ...(apiKey && appId
+      ? {
+          pickSpreadsheet: (token: string) =>
+            pickSpreadsheet({ apiKey, appId }, token, strings.connect.pickerTitle),
+        }
+      : {}),
     api: createHttpApi(() => tokens.getToken()),
     db: new CacheDb(),
     reload: () => {
@@ -21,8 +30,8 @@ function createSession(clientId: string): SessionStore {
 }
 
 /** The app on Google Sheets: sign-in page first time, then notes from the cache. */
-export function GoogleApp({ clientId }: { clientId: string }) {
-  const [session] = useState(() => createSession(clientId))
+export function GoogleApp({ config }: { config: GoogleConfig }) {
+  const [session] = useState(() => createSession(config))
   return <SessionApp session={session} />
 }
 

@@ -1,18 +1,21 @@
-import type { Scope } from '@devnotes/core'
-import { Menu } from 'lucide-react'
+import { isSharedProject, type Scope } from '@devnotes/core'
+import { Menu, TriangleAlert, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { DeleteToast } from '../features/notes/DeleteToast'
 import { NoteDialog } from '../features/notes/NoteDialog'
 import { NoteGrid } from '../features/notes/NoteGrid'
+import { ShareDialog } from '../features/projects/ShareDialog'
 import { QuickAdd } from '../features/quick-add/QuickAdd'
 import { SearchField } from '../features/search/SearchField'
 import { SessionBanner } from '../features/sync/SessionBanner'
 import { strings } from '../i18n'
 import { useProjects } from '../store/hooks'
 import { useSessionStore } from '../store/sessionContext'
-import { iconButtonClass } from '../ui/styles'
+import { iconButtonClass, secondaryButtonClass } from '../ui/styles'
 import { navigate, scopeKey, useScope } from './router'
 import { Sidebar } from './Sidebar'
+
+const SHARED_REFRESH_MS = 60_000
 
 function scopeTitle(scope: Scope, projectName: string | undefined): string {
   switch (scope.kind) {
@@ -33,6 +36,7 @@ export function AppShell() {
   const projects = useProjects()
   const [menuOpen, setMenuOpen] = useState(false)
   const session = useSessionStore()
+  const [sharing, setSharing] = useState(false)
 
   const project =
     scope.kind === 'project' ? projects.find((p) => p.id === scope.projectId) : undefined
@@ -42,6 +46,21 @@ export function AppShell() {
   useEffect(() => {
     if (unknownProject) navigate({ kind: 'all' })
   }, [unknownProject])
+
+  // An open shared project is re-read every minute to show other people's edits.
+  const sharedOpenId =
+    session && project && isSharedProject(project) && !project.unavailable ? project.id : null
+  useEffect(() => {
+    if (!session || !sharedOpenId) return
+    const timer = window.setInterval(() => {
+      void session.getState().actions.refreshProject(sharedOpenId)
+    }, SHARED_REFRESH_MS)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [session, sharedOpenId])
+
+  const canShare = session !== null && project?.role === 'owner' && !project.unavailable
 
   const closeMenu = () => {
     setMenuOpen(false)
@@ -82,10 +101,40 @@ export function AppShell() {
             </h1>
           </div>
           <SearchField />
+          {canShare && (
+            <button
+              type="button"
+              onClick={() => {
+                setSharing(true)
+              }}
+              className={`${secondaryButtonClass} gap-2 md:ml-auto`}
+            >
+              <UserPlus aria-hidden="true" size={18} />
+              {strings.share.button}
+            </button>
+          )}
         </header>
 
         <main className="space-y-5 px-4 pb-24 md:px-8">
           {session && <SessionBanner />}
+          {project?.unavailable && (
+            <section
+              aria-label={strings.project.unavailable}
+              className="flex gap-3 rounded-card border border-line bg-panel px-5 py-4"
+            >
+              <TriangleAlert
+                aria-hidden="true"
+                size={20}
+                className="mt-0.5 shrink-0 text-status-wip"
+              />
+              <div>
+                <h2 className="font-semibold text-fg">{strings.project.unavailable}</h2>
+                <p className="mt-0.5 text-sm text-fg-secondary">
+                  {strings.project.unavailableText}
+                </p>
+              </div>
+            </section>
+          )}
           {scope.kind !== 'archive' && (
             <QuickAdd
               key={scopeKey(scope)}
@@ -96,6 +145,14 @@ export function AppShell() {
         </main>
       </div>
 
+      {sharing && project && (
+        <ShareDialog
+          project={project}
+          onClose={() => {
+            setSharing(false)
+          }}
+        />
+      )}
       <NoteDialog />
       <DeleteToast />
     </div>

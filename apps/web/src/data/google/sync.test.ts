@@ -1,10 +1,9 @@
 import { createNote, type Note } from '@devnotes/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FakeGoogle } from '../../test/fakeGoogle'
-import type { DataStore } from '../DataStore'
 import { AuthError, TransientError } from './api'
 import { CacheDb } from './cache'
-import { createGoogleStore } from './googleStore'
+import { createGoogleStore, type GoogleDataStore } from './googleStore'
 import { SyncEngine } from './sync'
 
 const T0 = '2026-11-19T09:00:00.000Z'
@@ -17,7 +16,7 @@ interface Setup {
   google: FakeGoogle
   db: CacheDb
   engine: SyncEngine
-  store: DataStore
+  store: GoogleDataStore
   home: string
 }
 
@@ -283,5 +282,96 @@ describe('reading the spreadsheets back', () => {
     await engine.refresh()
     await done
     expect(snapshots).toEqual([1])
+  })
+})
+
+describe('shared and unavailable projects', () => {
+  it('marks a project whose spreadsheet is gone and keeps its cached notes', async () => {
+    const { google, engine, store } = await setup()
+    const project = await store.createProject('Платформер')
+    await store.createNote(note('n1', 'Заметка проекта', { projectId: project.id }))
+    await engine.flushNow()
+    await engine.refresh()
+
+    google.gone.add(project.spreadsheetId)
+    await engine.refresh()
+
+    const snapshot = await store.load()
+    expect(snapshot.projects).toEqual([
+      expect.objectContaining({ id: project.id, unavailable: true }),
+    ])
+    expect(snapshot.notes.map((n) => n.id)).toEqual(['n1'])
+  })
+
+  it('takes the shared flag from Drive', async () => {
+    const { google, engine, store } = await setup()
+    const project = await store.createProject('Платформер')
+    await engine.flushNow()
+    await google.shareSpreadsheet(project.spreadsheetId, 'friend@example.com')
+
+    await engine.refresh()
+
+    expect((await store.load()).projects[0]).toMatchObject({ shared: true, unavailable: false })
+  })
+
+  it('re-reads only the open project', async () => {
+    const { google, engine, store, home } = await setup()
+    const project = await store.createProject('Платформер')
+    await engine.flushNow()
+    await engine.refresh()
+    google.sheet(project.spreadsheetId, 'notes').push(['p1', 'От участника'])
+    google.calls.length = 0
+
+    await engine.refresh(project.id)
+
+    expect(google.calls).toEqual(['getValues'])
+    expect((await store.load()).notes).toEqual([
+      expect.objectContaining({ id: 'p1', projectId: project.id }),
+    ])
+    expect(google.records(home, 'projects')).toHaveLength(1)
+  })
+
+  it('renames the spreadsheet of an owned project', async () => {
+    const { google, engine, store } = await setup()
+    const project = await store.createProject('Платформер')
+    await engine.flushNow()
+
+    await store.updateProject({ ...project, name: 'Платформер 2' })
+    await engine.flushNow()
+
+    const meta = google.records(project.spreadsheetId, 'meta')
+    expect(meta.find((row) => row.key === 'name')?.value).toBe('Платформер 2')
+    expect(google.spreadsheets.get(project.spreadsheetId)?.title).toBe('DevNotes — Платформер 2')
+  })
+})
+
+describe('connecting a shared project', () => {
+  it('adds a picked project spreadsheet as a member project', async () => {
+    const { google, engine, store, home } = await setup()
+    const shared = await google.createSpreadsheet('project', 'DevNotes — Чужой', 'Чужой')
+    google.sheet(shared, 'notes').push(['s1', 'Заметка владельца'])
+    const connect = (spreadsheetId: string) => store.connectProject(spreadsheetId)
+
+    const result = await connect(shared)
+    await engine.flushNow()
+    await engine.refresh()
+
+    expect(result).toMatchObject({
+      alreadyListed: false,
+      project: { name: 'Чужой', role: 'member' },
+    })
+    expect(google.records(home, 'projects')).toEqual([
+      expect.objectContaining({ spreadsheet_id: shared, role: 'member' }),
+    ])
+    const snapshot = await store.load()
+    expect(snapshot.notes.map((n) => n.title)).toEqual(['Заметка владельца'])
+
+    expect(await connect(shared)).toMatchObject({ alreadyListed: true })
+  })
+
+  it('refuses a spreadsheet that is not a DevNotes project', async () => {
+    const { google, store } = await setup()
+    const home2 = await google.createSpreadsheet('home', 'DevNotes', 'DevNotes')
+    expect(await store.connectProject(home2)).toEqual({ error: 'notProject' })
   })
 })

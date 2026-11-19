@@ -38,7 +38,12 @@ function newDb(): CacheDb {
   return db
 }
 
-function startApp(google: FakeGoogle, db: CacheDb, tokens = fakeTokens()) {
+function startApp(
+  google: FakeGoogle,
+  db: CacheDb,
+  tokens = fakeTokens(),
+  pickSpreadsheet?: () => Promise<string | null>,
+) {
   const reload = vi.fn()
   const session = createGoogleSession({
     tokens,
@@ -46,6 +51,7 @@ function startApp(google: FakeGoogle, db: CacheDb, tokens = fakeTokens()) {
     db,
     reload,
     engineOptions: { debounceMs: 0 },
+    ...(pickSpreadsheet ? { pickSpreadsheet } : {}),
   })
   sessions.push(session)
   const user = userEvent.setup()
@@ -184,5 +190,94 @@ describe('Google mode', () => {
       expect(reload).toHaveBeenCalled()
     })
     expect(tokens.revoke).toHaveBeenCalled()
+  })
+})
+
+describe('projects in Google mode', () => {
+  async function signIn(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: strings.signIn.button }))
+    await screen.findByRole('navigation', { name: strings.nav.label })
+  }
+
+  it('shares an own project with another Google account', async () => {
+    const google = new FakeGoogle()
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+
+    await user.click(screen.getByRole('button', { name: strings.project.new }))
+    await user.type(
+      screen.getByRole('textbox', { name: strings.project.nameLabel }),
+      'Платформер{Enter}',
+    )
+    await screen.findByRole('heading', { level: 1, name: 'Платформер' })
+
+    await user.click(screen.getByRole('button', { name: strings.share.button }))
+    const dialog = await screen.findByRole('dialog')
+    const field = within(dialog).getByRole('textbox', { name: strings.share.emailLabel })
+
+    await user.type(field, 'не почта{Enter}')
+    expect(await within(dialog).findByText(strings.share.errors.invalidEmail)).toBeVisible()
+
+    await user.clear(field)
+    await user.type(field, 'friend@example.com{Enter}')
+    expect(await within(dialog).findByText(/friend@example\.com/)).toBeVisible()
+    const project = [...google.spreadsheets].find(([, sheet]) => sheet.kind === 'project')
+    expect(google.permissions.get(project?.[0] ?? '')).toEqual(['friend@example.com'])
+  })
+
+  it('connects a shared project picked in Google Picker', async () => {
+    const google = new FakeGoogle()
+    const shared = await google.createSpreadsheet(
+      'project',
+      'DevNotes — Карточная игра',
+      'Карточная игра',
+    )
+    google.sheet(shared, 'notes').push(['s1', 'Баланс колоды'])
+    const pick = vi.fn(() => Promise.resolve(shared))
+    const { user } = startApp(google, newDb(), fakeTokens(), pick)
+    await signIn(user)
+
+    await user.click(screen.getByRole('button', { name: strings.connect.button }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Карточная игра' })).toBeVisible()
+    expect(await screen.findByText('Баланс колоды')).toBeVisible()
+    expect(screen.getByText(strings.project.shared)).toBeInTheDocument()
+    // A member does not share the owner's spreadsheet further.
+    expect(screen.queryByRole('button', { name: strings.share.button })).toBeNull()
+  })
+
+  it('explains when the picked spreadsheet is not a DevNotes project', async () => {
+    const google = new FakeGoogle()
+    const pick = vi.fn(() => Promise.resolve('home-1'))
+    const { user } = startApp(google, newDb(), fakeTokens(), pick)
+    await signIn(user)
+
+    await user.click(screen.getByRole('button', { name: strings.connect.button }))
+
+    expect(await screen.findByText(strings.connect.errors.notProject)).toBeVisible()
+  })
+
+  it('hides "Connect a shared project" without Picker keys', async () => {
+    const google = new FakeGoogle()
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+    expect(screen.queryByRole('button', { name: strings.connect.button })).toBeNull()
+  })
+
+  it('shows that a project spreadsheet is unavailable', async () => {
+    const google = new FakeGoogle()
+    const db = newDb()
+    const home = await seedCache(google, db)
+    const gone = await google.createSpreadsheet('project', 'DevNotes — Старый', 'Старый')
+    google
+      .sheet(home, 'projects')
+      .push(['p1', 'Старый', gone, 'owner', 0, '2026-11-19T09:00:00.000Z', false])
+    google.gone.add(gone)
+    const { user } = startApp(google, db)
+
+    await user.click(await screen.findByRole('button', { name: strings.session.continue }))
+    await user.click(await screen.findByRole('link', { name: /Старый/ }))
+
+    expect(await screen.findByRole('region', { name: strings.project.unavailable })).toBeVisible()
   })
 })
