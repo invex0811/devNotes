@@ -30,6 +30,9 @@ export default defineConfig([
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+    },
   },
 
   // The website runs in the browser and uses React.

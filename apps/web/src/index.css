@@ -23,6 +23,9 @@
   --color-fg-secondary: #b4bccb;
   --color-fg-muted: #9aa3b2;
 
+  /* Dimming behind dialogs and the mobile menu */
+  --color-backdrop: #07080b;
+
   /* Accent */
   --color-accent: #c6f04d;
   --color-on-accent: #10130a;
@@ -32,10 +35,19 @@
   --color-status-wip: #f5b544;
   --color-status-done: #5bd68a;
 
-  /* Built-in labels */
-  --color-label-idea: #b79cff;
-  --color-label-bug: #ff8a80;
-  --color-label-fix: #5cc8f0;
+  /*
+   * Label colors. Violet, red and blue are the built-in labels from the spec
+   * (idea, bug, fix); together with the other five they form the palette
+   * a user picks from for their own labels.
+   */
+  --color-tag-violet: #b79cff;
+  --color-tag-red: #ff8a80;
+  --color-tag-blue: #5cc8f0;
+  --color-tag-amber: #f5b544;
+  --color-tag-green: #5bd68a;
+  --color-tag-gray: #aeb8cc;
+  --color-tag-pink: #ff9bd0;
+  --color-tag-teal: #4fd1c5;
 
   /* Note card tints */
   --color-note-red: #261d1e;
