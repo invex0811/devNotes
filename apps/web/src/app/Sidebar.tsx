@@ -17,7 +17,14 @@ import { NewProjectForm } from '../features/projects/NewProjectForm'
 import { ProjectDialog } from '../features/projects/ProjectDialog'
 import { AccountPanel } from '../features/sync/AccountPanel'
 import { strings } from '../i18n'
-import { useActions, useApp, useLabels, useListedNotes, useProjects } from '../store/hooks'
+import {
+  useActions,
+  useApp,
+  useLabels,
+  useListedNotes,
+  useProjects,
+  useReviewNotes,
+} from '../store/hooks'
 import { useSessionStore } from '../store/sessionContext'
 import { Logo } from '../ui/Logo'
 import { sectionTitleClass } from '../ui/styles'
@@ -42,6 +49,7 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
   const notes = useListedNotes()
   const projects = useProjects()
   const labels = useLabels()
+  const reviewCount = useReviewNotes().length
   const statusFilter = useApp((state) => state.statusFilter)
   const labelFilter = useApp((state) => state.labelFilter)
   const session = useSessionStore()
@@ -79,6 +87,25 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
       <ul className="space-y-0.5">
         <li>{scopeLink({ kind: 'all' }, strings.nav.all)}</li>
         <li>{scopeLink({ kind: 'inbox' }, strings.nav.inbox)}</li>
+        <li>
+          <a
+            href={scopeHref({ kind: 'review' })}
+            aria-current={scope.kind === 'review' ? 'page' : undefined}
+            onClick={onNavigate}
+            className={`${rowClass} ${scope.kind === 'review' ? activeRowClass : ''}`}
+          >
+            <span className="min-w-0 truncate">{strings.nav.review}</span>
+            <span
+              className={
+                reviewCount > 0
+                  ? 'ml-auto inline-flex min-w-6 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-xs font-semibold text-on-accent'
+                  : countClass
+              }
+            >
+              {reviewCount}
+            </span>
+          </a>
+        </li>
         <li>{scopeLink({ kind: 'archive' }, strings.nav.archive)}</li>
       </ul>
 

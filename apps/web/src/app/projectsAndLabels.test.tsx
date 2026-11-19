@@ -30,7 +30,8 @@ describe('projects', () => {
     await user.type(nav.getByRole('textbox', { name: strings.project.nameLabel }), '  {Enter}')
 
     expect(await nav.findByRole('alert')).toHaveTextContent(strings.project.errors.empty)
-    expect(nav.getAllByRole('link')).toHaveLength(5)
+    // All, inbox, review, archive and the two projects: no new project appeared.
+    expect(nav.getAllByRole('link')).toHaveLength(6)
   })
 
   it('renames a project', async () => {

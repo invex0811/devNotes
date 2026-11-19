@@ -4,7 +4,12 @@ import type { Project } from './project'
 
 /** What part of the notes the user is looking at. */
 export type Scope =
-  { kind: 'all' } | { kind: 'inbox' } | { kind: 'archive' } | { kind: 'project'; projectId: string }
+  | { kind: 'all' }
+  | { kind: 'inbox' }
+  | { kind: 'archive' }
+  /** Cards from AI waiting for the user to accept them. */
+  | { kind: 'review' }
+  | { kind: 'project'; projectId: string }
 
 export interface NoteFilters {
   status: NoteStatus | null
@@ -19,13 +24,30 @@ export const NO_FILTERS: NoteFilters = { status: null, label: null, query: '' }
  * and not belonging to a project that was removed from the list.
  */
 export function listedNotes(notes: readonly Note[], projects: readonly Project[]): Note[] {
-  const active = new Set(projects.filter((project) => !project.removed).map((p) => p.id))
+  const active = activeProjectIds(projects)
   return notes.filter(
     (note) =>
       !note.deleted &&
       note.review !== 'pending' &&
       (note.projectId === null || active.has(note.projectId)),
   )
+}
+
+/** "На проверку": AI cards not accepted yet, newest first. Hidden everywhere else. */
+export function reviewNotes(notes: readonly Note[], projects: readonly Project[]): Note[] {
+  const active = activeProjectIds(projects)
+  return notes
+    .filter(
+      (note) =>
+        !note.deleted &&
+        note.review === 'pending' &&
+        (note.projectId === null || active.has(note.projectId)),
+    )
+    .toSorted((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+function activeProjectIds(projects: readonly Project[]): Set<string> {
+  return new Set(projects.filter((project) => !project.removed).map((p) => p.id))
 }
 
 export function isInScope(note: Note, scope: Scope): boolean {
@@ -36,6 +58,8 @@ export function isInScope(note: Note, scope: Scope): boolean {
       return !note.archived
     case 'inbox':
       return !note.archived && note.labels.length === 0
+    case 'review':
+      return note.review === 'pending'
     case 'project':
       return !note.archived && note.projectId === scope.projectId
   }

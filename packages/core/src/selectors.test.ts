@@ -7,6 +7,7 @@ import {
   countStatuses,
   listedNotes,
   noteMatchesQuery,
+  reviewNotes,
   selectNotes,
 } from './selectors'
 import { makeNote } from './testing'
@@ -124,5 +125,18 @@ describe('noteMatchesQuery', () => {
 
   it('matches everything for an empty query', () => {
     expect(noteMatchesQuery(note, '   ')).toBe(true)
+  })
+})
+
+describe('review', () => {
+  it('lists only AI cards waiting for review, newest first, and hides them elsewhere', () => {
+    const waiting = makeNote({ id: 'w', review: 'pending', createdAt: '2026-11-02T00:00:00.000Z' })
+    const newer = makeNote({ id: 'n', review: 'pending', createdAt: '2026-11-03T00:00:00.000Z' })
+    const deleted = makeNote({ id: 'd', review: 'pending', deleted: true })
+    const plain = makeNote({ id: 'p' })
+    const notes = [waiting, newer, deleted, plain]
+
+    expect(reviewNotes(notes, []).map((note) => note.id)).toEqual(['n', 'w'])
+    expect(listedNotes(notes, []).map((note) => note.id)).toEqual(['p'])
   })
 })

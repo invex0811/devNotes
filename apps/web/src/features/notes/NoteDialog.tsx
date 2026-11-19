@@ -237,6 +237,7 @@ function NoteDialogContent({ note }: { note: Note }) {
 
           <p className="mr-auto font-mono text-xs text-fg-muted">
             {strings.note.changed} {formatNoteDate(note.updatedAt, new Date())}
+            {note.source !== 'user' && <> · {strings.note.createdByAi}</>}
           </p>
 
           <div className="flex gap-2">

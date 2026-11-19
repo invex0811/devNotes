@@ -7,6 +7,7 @@ export function parseHash(hash: string): Scope {
   const path = hash.replace(/^#\/?/, '')
   if (path === 'inbox') return { kind: 'inbox' }
   if (path === 'archive') return { kind: 'archive' }
+  if (path === 'review') return { kind: 'review' }
   const project = /^project\/(.+)$/.exec(path)
   if (project?.[1]) {
     try {
@@ -26,6 +27,8 @@ export function scopeHref(scope: Scope): string {
       return '#/inbox'
     case 'archive':
       return '#/archive'
+    case 'review':
+      return '#/review'
     case 'project':
       return `#/project/${encodeURIComponent(scope.projectId)}`
   }
