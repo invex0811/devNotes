@@ -1,5 +1,6 @@
 import {
   allLabels,
+  applyBugRules,
   applyNotePatch,
   createNote,
   isSameLabel,
@@ -29,7 +30,29 @@ export const UNDO_TIMEOUT_MS = 5000
 export interface DeletedToast {
   /** Changes with every deletion so the countdown restarts. */
   id: number
-  noteId: string
+  /** One note, or several deleted together from the selection panel. */
+  noteIds: string[]
+}
+
+/** How the notes are shown: a grid of cards or a board with a column per status. */
+export type NotesView = 'grid' | 'board'
+
+const VIEW_STORAGE_KEY = 'devnotes.view'
+
+function readStoredView(): NotesView {
+  try {
+    return localStorage.getItem(VIEW_STORAGE_KEY) === 'board' ? 'board' : 'grid'
+  } catch {
+    return 'grid'
+  }
+}
+
+function storeView(view: NotesView): void {
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, view)
+  } catch {
+    // Storage may be unavailable (private mode); the view then resets on reload.
+  }
 }
 
 export interface AppActions {
@@ -44,6 +67,8 @@ export interface AppActions {
   toggleNoteLabel: (id: string, label: string) => void
   toggleChecklistItem: (id: string, line: number) => void
   deleteNote: (id: string) => void
+  /** Changes the status, as dragging a card to another board column does. */
+  setStatus: (id: string, status: NoteStatus) => void
   undoDelete: () => void
   dismissToast: () => void
 
@@ -53,6 +78,12 @@ export interface AppActions {
   setQuery: (query: string) => void
   toggleStatusFilter: (status: NoteStatus) => void
   toggleLabelFilter: (label: string) => void
+
+  setView: (view: NotesView) => void
+  toggleSelected: (id: string) => void
+  clearSelection: () => void
+  archiveSelected: () => void
+  deleteSelected: () => void
 
   createLabel: (name: string, color: LabelColor) => LabelNameError | null
   updateLabel: (currentName: string, name: string, color: LabelColor) => LabelNameError | null
@@ -73,6 +104,9 @@ export interface AppState {
   query: string
   openNoteId: string | null
   toast: DeletedToast | null
+  view: NotesView
+  /** Notes picked with the card checkboxes; while any is picked, a click selects. */
+  selectedIds: string[]
   actions: AppActions
 }
 
@@ -107,7 +141,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     const patchNote = (id: string, patch: NotePatch) => {
       const note = get().notes.find((candidate) => candidate.id === id)
       if (!note) return
-      const next = applyNotePatch(note, patch, now())
+      const next = applyBugRules(note, applyNotePatch(note, patch, now()))
       replaceNote(next)
       if (next.projectId !== note.projectId) persist(dataStore.moveNote(next, note.projectId))
       else persist(dataStore.updateNote(next))
@@ -129,6 +163,19 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       for (const note of changed) persist(dataStore.updateNote(note))
     }
 
+    /** Deletes notes softly and offers "Undo" for five seconds. */
+    const deleteNotes = (ids: string[]) => {
+      if (ids.length === 0) return
+      for (const id of ids) patchNote(id, { deleted: true })
+      toastSeq += 1
+      const openNoteId = get().openNoteId
+      set({
+        toast: { id: toastSeq, noteIds: ids },
+        openNoteId: openNoteId !== null && ids.includes(openNoteId) ? null : openNoteId,
+        selectedIds: get().selectedIds.filter((id) => !ids.includes(id)),
+      })
+    }
+
     const actions: AppActions = {
       async load() {
         const snapshot = await dataStore.load()
@@ -148,13 +195,16 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       addNote(text, projectId) {
         const input = parseQuickInput(text, allLabels(get().customLabels))
         if (input.title === '') return false
-        const note = createNote({
-          id: newId(),
-          now: now(),
-          title: input.title,
-          projectId,
-          labels: input.label === null ? [] : [input.label],
-        })
+        const note = applyBugRules(
+          null,
+          createNote({
+            id: newId(),
+            now: now(),
+            title: input.title,
+            projectId,
+            labels: input.label === null ? [] : [input.label],
+          }),
+        )
         set({ notes: [...get().notes, note] })
         persist(dataStore.createNote(note))
         return true
@@ -178,18 +228,18 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       },
 
       deleteNote(id) {
-        patchNote(id, { deleted: true })
-        toastSeq += 1
-        set({
-          toast: { id: toastSeq, noteId: id },
-          openNoteId: get().openNoteId === id ? null : get().openNoteId,
-        })
+        deleteNotes([id])
+      },
+
+      setStatus(id, status) {
+        const note = get().notes.find((candidate) => candidate.id === id)
+        if (note && note.status !== status) patchNote(id, { status })
       },
 
       undoDelete() {
         const toast = get().toast
         if (!toast) return
-        patchNote(toast.noteId, { deleted: false })
+        for (const id of toast.noteIds) patchNote(id, { deleted: false })
         set({ toast: null })
       },
 
@@ -211,6 +261,33 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
       toggleStatusFilter(status) {
         set({ statusFilter: get().statusFilter === status ? null : status })
+      },
+
+      setView(view) {
+        storeView(view)
+        set({ view })
+      },
+
+      toggleSelected(id) {
+        const selected = get().selectedIds
+        set({
+          selectedIds: selected.includes(id)
+            ? selected.filter((candidate) => candidate !== id)
+            : [...selected, id],
+        })
+      },
+
+      clearSelection() {
+        set({ selectedIds: [] })
+      },
+
+      archiveSelected() {
+        for (const id of get().selectedIds) patchNote(id, { archived: true })
+        set({ selectedIds: [] })
+      },
+
+      deleteSelected() {
+        deleteNotes(get().selectedIds)
       },
 
       toggleLabelFilter(label) {
@@ -301,6 +378,8 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       query: '',
       openNoteId: null,
       toast: null,
+      view: readStoredView(),
+      selectedIds: [],
       actions,
     }
   })

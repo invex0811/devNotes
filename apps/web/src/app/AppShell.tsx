@@ -1,15 +1,19 @@
-import { isSharedProject, type Scope } from '@devnotes/core'
-import { Menu, TriangleAlert, UserPlus } from 'lucide-react'
+import { isSharedProject, type Note, type Scope } from '@devnotes/core'
+import { Copy, Menu, TriangleAlert, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { CopyForAiDialog } from '../features/ai-copy/CopyForAiDialog'
+import { Board } from '../features/board/Board'
+import { ViewSwitch } from '../features/board/ViewSwitch'
 import { DeleteToast } from '../features/notes/DeleteToast'
 import { NoteDialog } from '../features/notes/NoteDialog'
 import { NoteGrid } from '../features/notes/NoteGrid'
 import { ShareDialog } from '../features/projects/ShareDialog'
 import { QuickAdd } from '../features/quick-add/QuickAdd'
 import { SearchField } from '../features/search/SearchField'
+import { SelectionBar } from '../features/selection/SelectionBar'
 import { SessionBanner } from '../features/sync/SessionBanner'
 import { strings } from '../i18n'
-import { useProjects } from '../store/hooks'
+import { useActions, useApp, useProjects, useVisibleNotes } from '../store/hooks'
 import { useSessionStore } from '../store/sessionContext'
 import { iconButtonClass, secondaryButtonClass } from '../ui/styles'
 import { navigate, scopeKey, useScope } from './router'
@@ -37,6 +41,22 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const session = useSessionStore()
   const [sharing, setSharing] = useState(false)
+  /** The notes the "Copy for AI" dialog was opened with; null when it is closed. */
+  const [aiNotes, setAiNotes] = useState<Note[] | null>(null)
+  const actions = useActions()
+  const view = useApp((state) => state.view)
+  const selectedIds = useApp((state) => state.selectedIds)
+  const visible = useVisibleNotes(scope)
+
+  // A selection belongs to the scope it was made in.
+  const currentScope = scopeKey(scope)
+  useEffect(() => {
+    actions.clearSelection()
+  }, [actions, currentScope])
+
+  /** The selected notes in display order, or every note on screen when none is selected. */
+  const notesForAi = (): Note[] =>
+    selectedIds.length > 0 ? visible.filter((note) => selectedIds.includes(note.id)) : visible
 
   const project =
     scope.kind === 'project' ? projects.find((p) => p.id === scope.projectId) : undefined
@@ -96,23 +116,39 @@ export function AppShell() {
             >
               <Menu size={22} />
             </button>
-            <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-fg">
-              {scopeTitle(scope, project?.name)}
-            </h1>
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
+                {scopeTitle(scope, project?.name)}
+              </h1>
+              {view === 'board' && <p className="text-sm text-fg-muted">{strings.board.hint}</p>}
+            </div>
           </div>
           <SearchField />
-          {canShare && (
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <ViewSwitch />
             <button
               type="button"
               onClick={() => {
-                setSharing(true)
+                setAiNotes(notesForAi())
               }}
-              className={`${secondaryButtonClass} gap-2 md:ml-auto`}
+              className={`${secondaryButtonClass} gap-2`}
             >
-              <UserPlus aria-hidden="true" size={18} />
-              {strings.share.button}
+              <Copy aria-hidden="true" size={18} />
+              {strings.aiCopy.button}
             </button>
-          )}
+            {canShare && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSharing(true)
+                }}
+                className={`${secondaryButtonClass} gap-2`}
+              >
+                <UserPlus aria-hidden="true" size={18} />
+                {strings.share.button}
+              </button>
+            )}
+          </div>
         </header>
 
         <main className="space-y-5 px-4 pb-24 md:px-8">
@@ -141,7 +177,7 @@ export function AppShell() {
               defaultProjectId={scope.kind === 'project' ? scope.projectId : null}
             />
           )}
-          <NoteGrid scope={scope} />
+          {view === 'board' ? <Board scope={scope} /> : <NoteGrid scope={scope} />}
         </main>
       </div>
 
@@ -153,6 +189,19 @@ export function AppShell() {
           }}
         />
       )}
+      {aiNotes && (
+        <CopyForAiDialog
+          notes={aiNotes}
+          onClose={() => {
+            setAiNotes(null)
+          }}
+        />
+      )}
+      <SelectionBar
+        onCopyForAi={() => {
+          setAiNotes(notesForAi())
+        }}
+      />
       <NoteDialog />
       <DeleteToast />
     </div>

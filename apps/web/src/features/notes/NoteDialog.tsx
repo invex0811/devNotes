@@ -1,4 +1,4 @@
-import { NOTE_COLORS, hasLabel, parseBody, type Note } from '@devnotes/core'
+import { NOTE_COLORS, hasLabel, parseBody, showsSolution, type Note } from '@devnotes/core'
 import { Check, ChevronDown, Pin, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { strings } from '../../i18n'
@@ -183,6 +183,33 @@ function NoteDialogContent({ note }: { note: Note }) {
               ))}
             </ul>
           </fieldset>
+        )}
+
+        {showsSolution(note) && (
+          <section className="mt-5 rounded-card border border-tag-blue/40 bg-tag-blue/5 p-4">
+            <label
+              htmlFor="note-solution"
+              className="flex items-center gap-2 font-semibold text-tag-blue"
+            >
+              <Check aria-hidden="true" size={18} />
+              {strings.solution.title}
+            </label>
+            <textarea
+              id="note-solution"
+              value={note.solution}
+              onChange={(event) => {
+                patch({ solution: event.target.value })
+              }}
+              aria-describedby="note-solution-hint"
+              placeholder={strings.solution.placeholder}
+              maxLength={20000}
+              rows={3}
+              className="mt-3 field-sizing-content max-h-[30dvh] min-h-20 w-full resize-none rounded-control border border-line bg-page px-3 py-2.5 text-[15px] leading-relaxed text-fg placeholder:text-fg-muted"
+            />
+            <p id="note-solution-hint" className="mt-2 text-sm text-fg-secondary">
+              {strings.solution.hint}
+            </p>
+          </section>
         )}
 
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-divider pt-5">
