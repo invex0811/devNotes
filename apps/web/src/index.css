@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens from the "Дизайн" section of the spec.
+ * The default Tailwind palette is switched off on purpose: the app has a single
+ * dark theme and every color must come from this list.
+ */
+@theme {
+  --color-*: initial;
+
+  /* Surfaces */
+  --color-page: #0f1115;
+  --color-sidebar: #14171d;
+  --color-panel: #171a21;
+  --color-card: #1a1e26;
+
+  /* Lines */
+  --color-line: #2a2f3a;
+  --color-divider: #232833;
+
+  /* Text */
+  --color-fg: #e8eaf0;
+  --color-fg-secondary: #b4bccb;
+  --color-fg-muted: #9aa3b2;
+
+  /* Accent */
+  --color-accent: #c6f04d;
+  --color-on-accent: #10130a;
+
+  /* Statuses */
+  --color-status-new: #aeb8cc;
+  --color-status-wip: #f5b544;
+  --color-status-done: #5bd68a;
+
+  /* Built-in labels */
+  --color-label-idea: #b79cff;
+  --color-label-bug: #ff8a80;
+  --color-label-fix: #5cc8f0;
+
+  /* Note card tints */
+  --color-note-red: #261d1e;
+  --color-note-violet: #211e2c;
+  --color-note-green: #18231f;
+  --color-note-yellow: #272019;
+
+  /* Typography */
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* Radii: button and field / card / dialog */
+  --radius-control: 8px;
+  --radius-card: 10px;
+  --radius-dialog: 14px;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background-color: var(--color-page);
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-page);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
