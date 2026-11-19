@@ -21,7 +21,7 @@ import {
   type ProjectNameError,
 } from '@devnotes/core'
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import type { DataStore } from '../data/DataStore'
+import type { DataSnapshot, DataStore } from '../data/DataStore'
 
 /** How long the "Deleted — Undo" message stays on screen. */
 export const UNDO_TIMEOUT_MS = 5000
@@ -34,6 +34,8 @@ export interface DeletedToast {
 
 export interface AppActions {
   load: () => Promise<void>
+  /** Takes fresh data from background sync (Google). */
+  applySnapshot: (snapshot: DataSnapshot) => void
 
   /** Creates a note from quick input. Returns false when there is nothing to save. */
   addNote: (text: string, projectId: string | null) => boolean
@@ -87,6 +89,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
   const newId = deps.newId ?? (() => crypto.randomUUID())
   const now = deps.now ?? (() => new Date().toISOString())
   let toastSeq = 0
+  let unsubscribe: (() => void) | null = null
 
   // Saving runs in the background: the interface never waits for storage.
   const persist = (work: Promise<unknown>) => {
@@ -129,8 +132,13 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     const actions: AppActions = {
       async load() {
         const snapshot = await dataStore.load()
+        actions.applySnapshot(snapshot)
+        set({ phase: 'ready' })
+        unsubscribe ??= dataStore.subscribe?.(actions.applySnapshot) ?? null
+      },
+
+      applySnapshot(snapshot) {
         set({
-          phase: 'ready',
           notes: snapshot.notes,
           customLabels: snapshot.labels,
           projects: snapshot.projects,

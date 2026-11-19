@@ -11,7 +11,7 @@ export function NewProjectForm({ onCreated }: { onCreated: (project: Project) =>
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ProjectNameError | null>(null)
+  const [error, setError] = useState<ProjectNameError | 'failed' | null>(null)
 
   const close = () => {
     setOpen(false)
@@ -29,6 +29,9 @@ export function NewProjectForm({ onCreated }: { onCreated: (project: Project) =>
       }
       close()
       onCreated(result)
+    } catch (failure) {
+      console.error('DevNotes: failed to create a project', failure)
+      setError('failed')
     } finally {
       setBusy(false)
     }

@@ -6,8 +6,10 @@ import { NoteDialog } from '../features/notes/NoteDialog'
 import { NoteGrid } from '../features/notes/NoteGrid'
 import { QuickAdd } from '../features/quick-add/QuickAdd'
 import { SearchField } from '../features/search/SearchField'
+import { SessionBanner } from '../features/sync/SessionBanner'
 import { strings } from '../i18n'
 import { useProjects } from '../store/hooks'
+import { useSessionStore } from '../store/sessionContext'
 import { iconButtonClass } from '../ui/styles'
 import { navigate, scopeKey, useScope } from './router'
 import { Sidebar } from './Sidebar'
@@ -30,6 +32,7 @@ export function AppShell() {
   const scope = useScope()
   const projects = useProjects()
   const [menuOpen, setMenuOpen] = useState(false)
+  const session = useSessionStore()
 
   const project =
     scope.kind === 'project' ? projects.find((p) => p.id === scope.projectId) : undefined
@@ -82,6 +85,7 @@ export function AppShell() {
         </header>
 
         <main className="space-y-5 px-4 pb-24 md:px-8">
+          {session && <SessionBanner />}
           {scope.kind !== 'archive' && (
             <QuickAdd
               key={scopeKey(scope)}
