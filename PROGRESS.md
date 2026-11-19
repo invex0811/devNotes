@@ -11,7 +11,7 @@
 | 4. Доска и баги           | Готов     | `main`, [PR #5](https://github.com/invex0811/devNotes/pull/5) |
 | 5. ИИ на сайте            | Готов     | `main`, [PR #6](https://github.com/invex0811/devNotes/pull/6) |
 | 6. MCP-сервер             | Готов     | `main`, [PR #7](https://github.com/invex0811/devNotes/pull/7) |
-| 7. Телефон и полировка    | Готов     | ветка `stage-7-polish`, PR в `main`                           |
+| 7. Телефон и полировка    | Готов     | `main`, [PR #8](https://github.com/invex0811/devNotes/pull/8) |
 
 ## Готово
 
