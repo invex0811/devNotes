@@ -112,7 +112,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
     /**
      * Rewrites the label list of every note that carries a label. This is upkeep,
-     * not an edit of the note, so `updatedAt` and the order of cards stay as they were.
+     * not an edit of the note, so `updatedAt` stays as it was.
      */
     const rewriteLabels = (label: string, rewrite: (labels: string[]) => string[]) => {
       const changed: Note[] = []

@@ -4,6 +4,7 @@ import { strings } from '../../i18n'
 import { useActions, useLabels, useProjects } from '../../store/hooks'
 import { LabelBadge } from '../../ui/LabelBadge'
 import { fieldClass, primaryButtonClass } from '../../ui/styles'
+import { useFittingPlaceholder } from '../../ui/useFittingPlaceholder'
 
 /** Value of the "no project" choice; real project ids are never empty. */
 const NO_PROJECT = ''
@@ -18,6 +19,10 @@ export function QuickAdd({ defaultProjectId }: { defaultProjectId: string | null
   const projects = useProjects()
   const [text, setText] = useState('')
   const [projectId, setProjectId] = useState(defaultProjectId)
+  const [placeholder, attachField] = useFittingPlaceholder(
+    strings.quickAdd.placeholder,
+    strings.quickAdd.placeholderShort,
+  )
 
   const parsed = parseQuickInput(text, labels)
   const label = parsed.label === null ? undefined : findLabel(labels, parsed.label)
@@ -36,13 +41,14 @@ export function QuickAdd({ defaultProjectId }: { defaultProjectId: string | null
     <form onSubmit={submit} className="rounded-dialog border border-line bg-panel p-3.5 sm:p-4">
       <div className="flex gap-2.5">
         <input
+          ref={attachField}
           value={text}
           onChange={(event) => {
             setText(event.target.value)
           }}
           aria-label={strings.quickAdd.label}
           aria-describedby="quick-add-hint"
-          placeholder={strings.quickAdd.placeholder}
+          placeholder={placeholder}
           autoComplete="off"
           className={fieldClass}
         />

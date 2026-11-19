@@ -45,6 +45,8 @@ export const ru = {
   quickAdd: {
     label: 'Новая заметка',
     placeholder: 'Новая заметка. Начните с «баг:», «идея:» или «фикс:»',
+    /** Shown instead of `placeholder` when the field is too narrow for it. */
+    placeholderShort: 'Новая заметка',
     add: 'Добавить',
     toProject: 'В проект:',
     hint: 'Enter сохраняет заметку. Без метки она попадёт во «Входящие».',

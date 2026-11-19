@@ -37,12 +37,18 @@ describe('listedNotes', () => {
 
 describe('selectNotes', () => {
   const notes = [
-    makeNote({ id: 'plain', updatedAt: '2026-11-10T00:00:00.000Z' }),
+    // `updatedAt` runs against `createdAt` here to show that it does not affect the order.
+    makeNote({
+      id: 'plain',
+      createdAt: '2026-11-10T00:00:00.000Z',
+      updatedAt: '2026-11-18T00:00:00.000Z',
+    }),
     makeNote({
       id: 'bug',
       labels: ['Баг'],
       status: 'wip',
       projectId: 'game',
+      createdAt: '2026-11-12T00:00:00.000Z',
       updatedAt: '2026-11-12T00:00:00.000Z',
     }),
     makeNote({
@@ -50,17 +56,17 @@ describe('selectNotes', () => {
       labels: ['Идея'],
       pinned: true,
       projectId: 'game',
-      updatedAt: '2026-11-01T00:00:00.000Z',
+      createdAt: '2026-11-01T00:00:00.000Z',
     }),
     makeNote({
       id: 'archived',
       labels: ['Баг'],
       archived: true,
-      updatedAt: '2026-11-15T00:00:00.000Z',
+      createdAt: '2026-11-15T00:00:00.000Z',
     }),
   ]
 
-  it('shows pinned notes first, the rest newest first, without archived ones', () => {
+  it('shows pinned notes first, the rest by creation time, newest first, without archived ones', () => {
     expect(selectNotes(notes, { kind: 'all' }, NO_FILTERS).map((n) => n.id)).toEqual([
       'pinned',
       'bug',

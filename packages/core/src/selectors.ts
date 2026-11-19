@@ -50,10 +50,14 @@ export function noteMatchesQuery(note: Note, query: string): boolean {
   )
 }
 
-/** Pinned notes first, the rest by last change, newest first. */
+/**
+ * Pinned notes first, the rest by creation time, newest first. Editing a note
+ * (a status click, restoring it after deletion) must not move its card, which
+ * is why `updatedAt` plays no part here.
+ */
 export function sortNotes(notes: readonly Note[]): Note[] {
   return notes.toSorted(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt),
+    (a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt),
   )
 }
 

@@ -16,7 +16,7 @@ export function testProject(id: string, name: string, order = 0): Project {
 export function testNote(
   id: string,
   title: string,
-  patch: NotePatch & { updatedAt?: string } = {},
+  patch: NotePatch & { createdAt?: string } = {},
 ): Note {
   return { ...createNote({ id, now: NOW, title, projectId: null }), ...patch }
 }
@@ -31,21 +31,21 @@ export function sampleData(): DataSnapshot {
         labels: ['Баг'],
         status: 'wip',
         projectId: 'game',
-        updatedAt: '2026-11-19T08:00:00.000Z',
+        createdAt: '2026-11-19T08:00:00.000Z',
       }),
       testNote('hook', 'Крюк-кошка', {
         labels: ['Идея'],
         projectId: 'game',
-        updatedAt: '2026-11-18T08:00:00.000Z',
+        createdAt: '2026-11-18T08:00:00.000Z',
       }),
       testNote('leak', 'Утечка памяти', {
         labels: ['Баг', 'Фикс'],
         status: 'done',
         solution: 'Отписка от событий',
         projectId: 'site',
-        updatedAt: '2026-11-12T08:00:00.000Z',
+        createdAt: '2026-11-12T08:00:00.000Z',
       }),
-      testNote('sprites', 'Спросить про спрайты', { updatedAt: '2026-11-10T08:00:00.000Z' }),
+      testNote('sprites', 'Спросить про спрайты', { createdAt: '2026-11-10T08:00:00.000Z' }),
     ],
   }
 }

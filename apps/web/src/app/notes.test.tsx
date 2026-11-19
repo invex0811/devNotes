@@ -136,6 +136,20 @@ describe('statuses, filters and search', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
+  it('keeps the card in its place when the status changes', async () => {
+    const { user } = await renderApp()
+    const order = cardTitles()
+
+    await user.click(
+      within(cardByTitle('Утечка памяти')).getByRole('button', statusButton('Готово')),
+    )
+
+    expect(
+      within(cardByTitle('Утечка памяти')).getByRole('button', statusButton('Новое')),
+    ).toBeVisible()
+    expect(cardTitles()).toEqual(order)
+  })
+
   it('filters by a label and a status from the sidebar; a second click removes the filter', async () => {
     const { user } = await renderApp()
     const nav = within(sidebar())
@@ -245,6 +259,7 @@ describe('note dialog', () => {
 
   it('deletes without confirmation and lets the user undo', async () => {
     const { user } = await renderApp()
+    const order = cardTitles()
     const dialog = within(await openNote(user, 'Крюк-кошка'))
 
     await user.click(dialog.getByRole('button', { name: strings.note.delete }))
@@ -255,7 +270,8 @@ describe('note dialog', () => {
 
     await user.click(screen.getByRole('button', { name: strings.note.undo }))
 
-    expect(cardTitles()).toContain('Крюк-кошка')
+    // The restored note returns to where it was, not to the top of the list.
+    expect(cardTitles()).toEqual(order)
     expect(screen.queryByText(strings.note.deleted)).not.toBeInTheDocument()
   })
 
