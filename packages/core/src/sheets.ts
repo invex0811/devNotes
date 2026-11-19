@@ -2,6 +2,7 @@ import { customLabelSchema, labelColorSchema, type CustomLabel } from './labels'
 import {
   BODY_MAX_LENGTH,
   NOTE_COLORS,
+  NOTE_SOURCES,
   NOTE_STATUSES,
   clampBody,
   clampTitle,
@@ -26,9 +27,17 @@ export type Cell = string | number | boolean
 export type SpreadsheetKind = 'home' | 'project'
 export type SheetName = 'meta' | 'notes' | 'labels' | 'projects'
 
-/** Drive `appProperties` key that marks DevNotes spreadsheets: `devnotes=home|project`. */
+/** Drive `appProperties` key that marks DevNotes files: `devnotes=home|project|folder`. */
 export const APP_PROPERTY_KEY = 'devnotes'
 export const HOME_SPREADSHEET_TITLE = 'DevNotes'
+/** The folder in the root of My Drive that holds the spreadsheets the app creates. */
+export const FOLDER_TITLE = 'DevNotes'
+/**
+ * `appProperties` key on the home spreadsheet: set once the spreadsheets that were
+ * created in the root of My Drive have been moved into the folder, so that a
+ * spreadsheet the user moves later is never moved back.
+ */
+export const FOLDER_MOVED_KEY = 'devnotes_folder_moved'
 
 export function projectSpreadsheetTitle(projectName: string): string {
   return `DevNotes — ${projectName}`
@@ -207,13 +216,11 @@ function labelList(cell: Cell | undefined): string[] {
 // ---------------------------------------------------------------------------
 // Notes
 
-/** The sheet keeps only `user` or `ai`; the app tells AI sources apart. */
-function sourceToCell(source: NoteSource): string {
-  return source === 'user' ? 'user' : 'ai'
-}
-
+/** `ai`, written by early versions, means an AI answer pasted on the site. */
 function sourceFromCell(cell: Cell | undefined): NoteSource {
-  return text(cell).trim() === 'ai' ? 'ai_paste' : 'user'
+  const value = text(cell).trim()
+  if (value === 'ai') return 'ai_paste'
+  return oneOf<NoteSource>(NOTE_SOURCES, value, 'user')
 }
 
 export function noteToRecord(note: Note): RowRecord {
@@ -227,7 +234,7 @@ export function noteToRecord(note: Note): RowRecord {
     pinned: note.pinned,
     archived: note.archived,
     solution: note.solution,
-    source: sourceToCell(note.source),
+    source: note.source,
     review: note.review ?? '',
     created_at: note.createdAt,
     updated_at: note.updatedAt,

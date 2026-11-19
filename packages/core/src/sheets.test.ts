@@ -59,10 +59,13 @@ describe('notes ↔ rows', () => {
     expect(note).toMatchObject({ id: 'n1', title: 'Заметка', status: 'done', labels: [] })
   })
 
-  it('maps the AI source to "ai" in the sheet', () => {
-    expect(noteToRecord({ ...makeNote(), source: 'ai_mcp' }).source).toBe('ai')
-    const row = recordToRow({ ...noteToRecord(makeNote()), source: 'ai' }, noteHeader)
-    expect(rowToNote(row, noteHeader, null)?.source).toBe('ai_paste')
+  it('keeps the AI source as it is and reads the old "ai" value', () => {
+    expect(noteToRecord({ ...makeNote(), source: 'ai_mcp' }).source).toBe('ai_mcp')
+    const row = (source: string) => recordToRow({ ...noteToRecord(makeNote()), source }, noteHeader)
+    expect(rowToNote(row('ai_paste'), noteHeader, null)?.source).toBe('ai_paste')
+    expect(rowToNote(row('ai_mcp'), noteHeader, null)?.source).toBe('ai_mcp')
+    expect(rowToNote(row('ai'), noteHeader, null)?.source).toBe('ai_paste')
+    expect(rowToNote(row('robot'), noteHeader, null)?.source).toBe('user')
   })
 
   it('accepts hand-edited values', () => {

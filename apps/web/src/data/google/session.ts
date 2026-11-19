@@ -1,4 +1,4 @@
-import { HOME_SPREADSHEET_TITLE } from '@devnotes/core'
+import { FOLDER_MOVED_KEY, HOME_SPREADSHEET_TITLE } from '@devnotes/core'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createAppStore, type AppStore } from '../../store/appStore'
 import {
@@ -6,10 +6,12 @@ import {
   GoogleHttpError,
   TransientError,
   type GoogleAccount,
+  type DriveFile,
   type GoogleApi,
 } from './api'
 import { KV, readCachedSession, type CacheDb } from './cache'
 import { TokenRequestError, type TokenFailure, type TokenSource } from './gis'
+import { ensureFolder, moveOldSpreadsheets } from './folder'
 import { createGoogleStore, type GoogleDataStore } from './googleStore'
 import { SyncEngine, type SyncEngineOptions, type SyncStatus } from './sync'
 
@@ -100,6 +102,8 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
   const focusDelay = deps.refreshOnFocusAfterMs ?? 15_000
   let engine: SyncEngine | null = null
   let googleStore: GoogleDataStore | null = null
+  /** The one-time move of old spreadsheets into the folder was tried in this session. */
+  let folderChecked = false
   let started = false
   let lastRefresh = 0
 
@@ -124,11 +128,43 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
       return current
     }
 
+    /**
+     * Once per session after sign-in: spreadsheets that early versions created in the
+     * root of My Drive go into the DevNotes folder. Runs in the background; a failure
+     * only means another try at the next sign-in.
+     */
+    const organizeFolder = (home?: DriveFile) => {
+      if (folderChecked) return
+      folderChecked = true
+      const work = async () => {
+        const file = home ?? (await api.findSpreadsheet('home'))
+        if (file) await moveOldSpreadsheets(api, file)
+      }
+      work().catch((error: unknown) => {
+        folderChecked = false
+        console.error('DevNotes: cannot move spreadsheets into the DevNotes folder', error)
+      })
+    }
+
     /** After a token is in hand: find or create the home spreadsheet and read everything. */
     const enterAccount = async (account: GoogleAccount) => {
-      const home =
-        (await api.findSpreadsheet('home')) ??
-        (await api.createSpreadsheet('home', HOME_SPREADSHEET_TITLE, HOME_SPREADSHEET_TITLE))
+      const found = await api.findSpreadsheet('home')
+      let home: string
+      if (found) {
+        home = found.id
+        organizeFolder(found)
+      } else {
+        // First sign-in: the folder, and the home spreadsheet right inside it. There
+        // is nothing in the root to move, so that is marked as done at once.
+        home = await api.createSpreadsheet(
+          'home',
+          HOME_SPREADSHEET_TITLE,
+          HOME_SPREADSHEET_TITLE,
+          await ensureFolder(api),
+          { [FOLDER_MOVED_KEY]: 'true' },
+        )
+        folderChecked = true
+      }
       await db.setValue(KV.account, account)
       await db.setValue(KV.homeSpreadsheetId, home)
       const current = openApp(account, home, 'ok')
@@ -242,6 +278,7 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
             }
             await db.setValue(KV.account, account)
             set({ auth: 'ok', account })
+            organizeFolder()
             await sync()
           }),
         )
