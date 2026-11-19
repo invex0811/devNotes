@@ -348,7 +348,7 @@ describe('shared and unavailable projects', () => {
 describe('connecting a shared project', () => {
   it('adds a picked project spreadsheet as a member project', async () => {
     const { google, engine, store, home } = await setup()
-    const shared = await google.createSpreadsheet('project', 'DevNotes — Чужой', 'Чужой')
+    const shared = google.addForeignProject('DevNotes — Чужой', 'Чужой')
     google.sheet(shared, 'notes').push(['s1', 'Заметка владельца'])
     const connect = (spreadsheetId: string) => store.connectProject(spreadsheetId)
 

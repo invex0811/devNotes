@@ -20,6 +20,11 @@ interface FakeSpreadsheet {
   kind: SpreadsheetKind
   title: string
   sheets: Map<string, Cell[][]>
+  /** `root` (the root of My Drive), a folder id, or anything else the user picked. */
+  parent: string
+  owner: 'me' | 'other'
+  /** Private `appProperties`. */
+  properties: Record<string, string>
 }
 
 function columnIndex(letters: string): number {
@@ -83,6 +88,8 @@ export class FakeGoogle implements GoogleApi {
   readonly permissions = new Map<string, string[]>()
   /** Spreadsheets that were deleted or closed: reading them answers 404. */
   readonly gone = new Set<string>()
+  /** DevNotes folders (`devnotes=folder`) in the root of My Drive. */
+  readonly folders = new Map<string, { trashed: boolean }>()
   /** Return an error to make the next call of that method fail. */
   fail: ((method: FakeMethod) => Error | null) | null = null
   private nextId = 0
@@ -119,12 +126,46 @@ export class FakeGoogle implements GoogleApi {
 
   findSpreadsheet(kind: SpreadsheetKind) {
     this.check('findSpreadsheet')
-    const found = [...this.spreadsheets].find(([, sheet]) => sheet.kind === kind)
-    return Promise.resolve(found?.[0] ?? null)
+    // Found by its mark wherever it lies, as Drive's files.list does.
+    const found = [...this.spreadsheets].find(
+      ([, sheet]) => sheet.kind === kind && sheet.owner === 'me',
+    )
+    return Promise.resolve(found ? { id: found[0], properties: { ...found[1].properties } } : null)
   }
 
-  createSpreadsheet(kind: SpreadsheetKind, title: string, name: string) {
+  /** In tests `folderId` may be left out: the spreadsheet then lies in the root. */
+  createSpreadsheet(
+    kind: SpreadsheetKind,
+    title: string,
+    name: string,
+    folderId: string | null = null,
+    properties: Readonly<Record<string, string>> = {},
+  ) {
     this.check('createSpreadsheet')
+    return Promise.resolve(
+      this.addSpreadsheet(kind, title, name, {
+        parent: folderId ?? 'root',
+        owner: 'me',
+        properties,
+      }),
+    )
+  }
+
+  /** A project spreadsheet of another person, shared with the user (not in their root). */
+  addForeignProject(title: string, name: string): string {
+    return this.addSpreadsheet('project', title, name, {
+      parent: 'shared-with-me',
+      owner: 'other',
+      properties: {},
+    })
+  }
+
+  private addSpreadsheet(
+    kind: SpreadsheetKind,
+    title: string,
+    name: string,
+    file: Pick<FakeSpreadsheet, 'parent' | 'owner' | 'properties'>,
+  ): string {
     this.nextId += 1
     const id = `${kind}-${String(this.nextId)}`
     const sheets = new Map<string, Cell[][]>()
@@ -133,8 +174,55 @@ export class FakeGoogle implements GoogleApi {
       if (sheet === 'meta') rows.push(...metaRows(kind, name))
       sheets.set(sheet, rows)
     }
-    this.spreadsheets.set(id, { kind, title, sheets })
+    this.spreadsheets.set(id, {
+      kind,
+      title,
+      sheets,
+      parent: file.parent,
+      owner: file.owner,
+      properties: { ...file.properties, devnotes: kind },
+    })
+    return id
+  }
+
+  findFolder() {
+    this.check('findFolder')
+    const found = [...this.folders].find(([, folder]) => !folder.trashed)
+    return Promise.resolve(found?.[0] ?? null)
+  }
+
+  createFolder() {
+    this.check('createFolder')
+    this.nextId += 1
+    const id = `folder-${String(this.nextId)}`
+    this.folders.set(id, { trashed: false })
     return Promise.resolve(id)
+  }
+
+  listRootSpreadsheets() {
+    this.check('listRootSpreadsheets')
+    return Promise.resolve(
+      [...this.spreadsheets]
+        .filter(([, sheet]) => sheet.parent === 'root' && sheet.owner === 'me')
+        .map(([id]) => id),
+    )
+  }
+
+  moveToFolder(fileId: string, folderId: string) {
+    this.check('moveToFolder')
+    const sheet = this.spreadsheets.get(fileId)
+    if (sheet?.parent !== 'root') {
+      return Promise.reject(new GoogleHttpError(400, 'The file is not in the root folder.'))
+    }
+    sheet.parent = folderId
+    return Promise.resolve()
+  }
+
+  setFileProperties(fileId: string, properties: Readonly<Record<string, string>>) {
+    this.check('setFileProperties')
+    const sheet = this.spreadsheets.get(fileId)
+    if (sheet) sheet.properties = { ...sheet.properties, ...properties }
+    return Promise.resolve()
   }
 
   getValues(spreadsheetId: string, ranges: readonly string[]) {

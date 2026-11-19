@@ -12,6 +12,7 @@ import {
 } from '@devnotes/core'
 import type { DataSnapshot, DataStore } from '../DataStore'
 import type { GoogleApi } from './api'
+import { ensureFolder } from './folder'
 import type { CacheDb, QueuedOp } from './cache'
 import type { SyncEngine } from './sync'
 
@@ -165,11 +166,13 @@ export function createGoogleStore(deps: GoogleStoreDeps): GoogleDataStore {
       }),
 
     async createProject(name) {
-      // A project is its own spreadsheet, so creating one needs Google right away.
+      // A project is its own spreadsheet in the DevNotes folder, so creating one
+      // needs Google right away. A deleted or trashed folder is replaced by a new one.
       const spreadsheetId = await api.createSpreadsheet(
         'project',
         projectSpreadsheetTitle(name),
         name,
+        await ensureFolder(api),
       )
       const projects = await db.projects.toArray()
       const project: Project = {

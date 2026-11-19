@@ -1,4 +1,4 @@
-import { createNote } from '@devnotes/core'
+import { FOLDER_MOVED_KEY, createNote } from '@devnotes/core'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -227,11 +227,7 @@ describe('projects in Google mode', () => {
 
   it('connects a shared project picked in Google Picker', async () => {
     const google = new FakeGoogle()
-    const shared = await google.createSpreadsheet(
-      'project',
-      'DevNotes — Карточная игра',
-      'Карточная игра',
-    )
+    const shared = google.addForeignProject('DevNotes — Карточная игра', 'Карточная игра')
     google.sheet(shared, 'notes').push(['s1', 'Баланс колоды'])
     const pick = vi.fn(() => Promise.resolve(shared))
     const { user } = startApp(google, newDb(), fakeTokens(), pick)
@@ -248,7 +244,8 @@ describe('projects in Google mode', () => {
 
   it('explains when the picked spreadsheet is not a DevNotes project', async () => {
     const google = new FakeGoogle()
-    const pick = vi.fn(() => Promise.resolve('home-1'))
+    // The user picks their own home spreadsheet: a DevNotes file, but not a project.
+    const pick = vi.fn(() => Promise.resolve([...google.spreadsheets.keys()][0] ?? ''))
     const { user } = startApp(google, newDb(), fakeTokens(), pick)
     await signIn(user)
 
@@ -279,5 +276,105 @@ describe('projects in Google mode', () => {
     await user.click(await screen.findByRole('link', { name: /Старый/ }))
 
     expect(await screen.findByRole('region', { name: strings.project.unavailable })).toBeVisible()
+  })
+})
+
+describe('the DevNotes folder on Drive', () => {
+  async function signIn(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: strings.signIn.button }))
+    await screen.findByRole('navigation', { name: strings.nav.label })
+  }
+
+  it('creates the folder at first sign-in and the home spreadsheet right in it', async () => {
+    const google = new FakeGoogle()
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+
+    const [folder] = [...google.folders.keys()]
+    const [home] = [...google.spreadsheets.values()]
+    expect(google.folders.size).toBe(1)
+    expect(home).toMatchObject({ kind: 'home', parent: folder })
+    expect(home?.properties[FOLDER_MOVED_KEY]).toBe('true')
+    expect(google.count('listRootSpreadsheets')).toBe(0)
+  })
+
+  it('moves own spreadsheets from the root into the folder once, not shared ones', async () => {
+    const google = new FakeGoogle()
+    const home = await google.createSpreadsheet('home', 'DevNotes', 'DevNotes')
+    const own = await google.createSpreadsheet('project', 'DevNotes — Платформер', 'Платформер')
+    const foreign = google.addForeignProject('DevNotes — Чужой', 'Чужой')
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+
+    await waitFor(() => {
+      expect(google.spreadsheets.get(home)?.properties[FOLDER_MOVED_KEY]).toBe('true')
+    })
+    const [folder] = [...google.folders.keys()]
+    expect(google.spreadsheets.get(home)?.parent).toBe(folder)
+    expect(google.spreadsheets.get(own)?.parent).toBe(folder)
+    expect(google.spreadsheets.get(foreign)?.parent).toBe('shared-with-me')
+  })
+
+  it('leaves a spreadsheet where the user put it later and still finds it', async () => {
+    const google = new FakeGoogle()
+    const home = await google.createSpreadsheet('home', 'DevNotes', 'DevNotes', 'my-folder', {
+      [FOLDER_MOVED_KEY]: 'true',
+    })
+    google.sheet(home, 'notes').push(['n1', 'Заметка в моей папке'])
+    // A project the user dragged back to the root after the one-time move.
+    const project = await google.createSpreadsheet('project', 'DevNotes — Сайт', 'Сайт')
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+
+    expect(await screen.findByText('Заметка в моей папке')).toBeVisible()
+    expect(google.spreadsheets.get(home)?.parent).toBe('my-folder')
+    expect(google.spreadsheets.get(project)?.parent).toBe('root')
+    expect(google.count('moveToFolder')).toBe(0)
+    expect(google.folders.size).toBe(0)
+  })
+
+  it('moves old spreadsheets after "Continue" too', async () => {
+    const google = new FakeGoogle()
+    const db = newDb()
+    const home = await seedCache(google, db)
+    const { user } = startApp(google, db)
+
+    await user.click(await screen.findByRole('button', { name: strings.session.continue }))
+
+    await waitFor(() => {
+      expect(google.spreadsheets.get(home)?.parent).toBe([...google.folders.keys()][0])
+    })
+  })
+
+  it('creates a new folder for a project when the old one is in the trash', async () => {
+    const google = new FakeGoogle()
+    const { user } = startApp(google, newDb())
+    await signIn(user)
+    const [oldFolder = ''] = [...google.folders.keys()]
+    google.folders.set(oldFolder, { trashed: true })
+
+    await user.click(screen.getByRole('button', { name: strings.project.new }))
+    await user.type(
+      screen.getByRole('textbox', { name: strings.project.nameLabel }),
+      'Платформер{Enter}',
+    )
+    await screen.findByRole('heading', { level: 1, name: 'Платформер' })
+
+    const newFolder = [...google.folders.keys()].find((id) => id !== oldFolder)
+    const project = [...google.spreadsheets.values()].find((sheet) => sheet.kind === 'project')
+    expect(newFolder).toBeDefined()
+    expect(project?.parent).toBe(newFolder)
+
+    // "Share" opens the project spreadsheet only, never the folder.
+    await user.click(screen.getByRole('button', { name: strings.share.button }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(
+      within(dialog).getByRole('textbox', { name: strings.share.emailLabel }),
+      'friend@example.com{Enter}',
+    )
+    await within(dialog).findByText(/friend@example\.com/)
+    expect([...google.permissions.keys()]).toEqual(
+      [...google.spreadsheets].filter(([, s]) => s.kind === 'project').map(([id]) => id),
+    )
   })
 })

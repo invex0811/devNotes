@@ -2,3 +2,5 @@ node_modules
 dist
 coverage
 package-lock.json
+# The spec is kept word for word as the owner wrote it.
+TZ.md

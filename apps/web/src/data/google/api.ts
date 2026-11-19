@@ -1,5 +1,6 @@
 import {
   APP_PROPERTY_KEY,
+  FOLDER_TITLE,
   SHEET_COLUMNS,
   metaRows,
   rangeRows,
@@ -18,6 +19,12 @@ export interface GoogleAccount {
   photoUrl: string | null
 }
 
+/** A DevNotes file found in Drive, with the app's private properties. */
+export interface DriveFile {
+  id: string
+  properties: Readonly<Record<string, string>>
+}
+
 export interface ValueRange {
   range: string
   values: Cell[][]
@@ -29,10 +36,32 @@ export interface ValueRange {
  */
 export interface GoogleApi {
   getAccount(): Promise<GoogleAccount>
-  /** Finds the user's spreadsheet of this kind by its Drive `appProperties` mark. */
-  findSpreadsheet(kind: SpreadsheetKind): Promise<string | null>
-  /** Creates a spreadsheet with all sheets and header rows and marks it in Drive. */
-  createSpreadsheet(kind: SpreadsheetKind, title: string, name: string): Promise<string>
+  /**
+   * Finds the user's spreadsheet of this kind by its Drive `appProperties` mark,
+   * wherever it lies on the Drive.
+   */
+  findSpreadsheet(kind: SpreadsheetKind): Promise<DriveFile | null>
+  /**
+   * Creates a spreadsheet with all sheets and header rows, marks it in Drive and
+   * puts it in `folderId` (the root of My Drive when null).
+   */
+  createSpreadsheet(
+    kind: SpreadsheetKind,
+    title: string,
+    name: string,
+    folderId: string | null,
+    properties?: Readonly<Record<string, string>>,
+  ): Promise<string>
+  /** The DevNotes folder (`devnotes=folder`) that is not in the trash, or null. */
+  findFolder(): Promise<string | null>
+  /** Creates the DevNotes folder in the root of My Drive. */
+  createFolder(): Promise<string>
+  /** The user's own DevNotes spreadsheets that lie right in the root of My Drive. */
+  listRootSpreadsheets(): Promise<string[]>
+  /** Moves a file from the root of My Drive into the folder. */
+  moveToFolder(fileId: string, folderId: string): Promise<void>
+  /** Adds private `appProperties` to a file; its other properties stay. */
+  setFileProperties(fileId: string, properties: Readonly<Record<string, string>>): Promise<void>
   /** `values.batchGet`; the result is aligned with `ranges`. */
   getValues(spreadsheetId: string, ranges: readonly string[]): Promise<Cell[][][]>
   /** `values.append` of new rows to a sheet; returns the rows they landed in. */
@@ -85,6 +114,7 @@ export class GoogleHttpError extends Error {
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets'
 const DRIVE = 'https://www.googleapis.com/drive/v3'
 const SPREADSHEET_MIME = 'application/vnd.google-apps.spreadsheet'
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
 /** Drive answers rate limits with 403 and one of these reasons. */
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded'])
@@ -155,9 +185,29 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
     },
 
     async findSpreadsheet(kind) {
-      const result = await call<{ files?: { id: string }[] }>(
+      const result = await call<{
+        files?: { id: string; appProperties?: Record<string, string> }[]
+      }>(
         `${DRIVE}/files?${query({
           q: filesOfKind(kind),
+          spaces: 'drive',
+          orderBy: 'createdTime',
+          pageSize: '10',
+          fields: 'files(id,appProperties)',
+        })}`,
+      )
+      const file = result.files?.[0]
+      return file ? { id: file.id, properties: file.appProperties ?? {} } : null
+    },
+
+    async findFolder() {
+      const result = await call<{ files?: { id: string }[] }>(
+        `${DRIVE}/files?${query({
+          q: [
+            `appProperties has { key='${APP_PROPERTY_KEY}' and value='folder' }`,
+            `mimeType='${FOLDER_MIME}'`,
+            'trashed=false',
+          ].join(' and '),
           spaces: 'drive',
           orderBy: 'createdTime',
           pageSize: '10',
@@ -165,6 +215,60 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
         })}`,
       )
       return result.files?.[0]?.id ?? null
+    },
+
+    async createFolder() {
+      // Without `parents` a new file lands in the root of My Drive.
+      const folder = await post<{ id: string }>(`${DRIVE}/files?fields=id`, {
+        name: FOLDER_TITLE,
+        mimeType: FOLDER_MIME,
+        appProperties: { [APP_PROPERTY_KEY]: 'folder' },
+      })
+      return folder.id
+    },
+
+    async listRootSpreadsheets() {
+      const marked = (kind: SpreadsheetKind) =>
+        `appProperties has { key='${APP_PROPERTY_KEY}' and value='${kind}' }`
+      const q = [
+        `'root' in parents`,
+        `'me' in owners`,
+        `mimeType='${SPREADSHEET_MIME}'`,
+        'trashed=false',
+        `(${marked('home')} or ${marked('project')})`,
+      ].join(' and ')
+      const ids: string[] = []
+      let pageToken: string | undefined
+      do {
+        const result = await call<{ files?: { id: string }[]; nextPageToken?: string }>(
+          `${DRIVE}/files?${query({
+            q,
+            spaces: 'drive',
+            pageSize: '1000',
+            fields: 'nextPageToken,files(id)',
+            ...(pageToken ? { pageToken } : {}),
+          })}`,
+        )
+        ids.push(...(result.files ?? []).map((file) => file.id))
+        pageToken = result.nextPageToken
+      } while (pageToken)
+      return ids
+    },
+
+    async moveToFolder(fileId, folderId) {
+      // The `root` alias stands for the root folder wherever a file id is expected.
+      const params = query({ addParents: folderId, removeParents: 'root', fields: 'id' })
+      await call(`${DRIVE}/files/${fileId}?${params}`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      })
+    },
+
+    async setFileProperties(fileId, properties) {
+      await call(`${DRIVE}/files/${fileId}?fields=id`, {
+        method: 'PATCH',
+        body: JSON.stringify({ appProperties: properties }),
+      })
     },
 
     async listProjectFiles() {
@@ -206,7 +310,7 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
       })
     },
 
-    async createSpreadsheet(kind, title, name) {
+    async createSpreadsheet(kind, title, name, folderId, properties = {}) {
       const sheets = sheetsOf(kind).map((sheet) => {
         const rows: Cell[][] = [[...SHEET_COLUMNS[sheet]]]
         if (sheet === 'meta') rows.push(...metaRows(kind, name))
@@ -219,10 +323,12 @@ export function createHttpApi(getToken: () => string | null): GoogleApi {
         properties: { title },
         sheets,
       })
-      // Sheets cannot set appProperties, so the mark is added through Drive.
-      await call(`${DRIVE}/files/${created.spreadsheetId}?fields=id`, {
+      // Sheets can set neither appProperties nor the folder: one Drive update adds
+      // the mark and moves the new file from the root of My Drive into the folder.
+      const move = folderId ? { addParents: folderId, removeParents: 'root' } : {}
+      await call(`${DRIVE}/files/${created.spreadsheetId}?${query({ ...move, fields: 'id' })}`, {
         method: 'PATCH',
-        body: JSON.stringify({ appProperties: { [APP_PROPERTY_KEY]: kind } }),
+        body: JSON.stringify({ appProperties: { ...properties, [APP_PROPERTY_KEY]: kind } }),
       })
       return created.spreadsheetId
     },
