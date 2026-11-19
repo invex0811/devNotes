@@ -12,7 +12,7 @@ export function SelectionBar({ onCopyForAi }: { onCopyForAi: () => void }) {
   if (count === 0) return null
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-5 z-30 flex justify-center px-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 md:bottom-5 flex justify-center px-4">
       <section
         aria-label={`${strings.selection.selected}: ${String(count)}`}
         className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-card border border-line bg-card py-1.5 pr-1.5 pl-2 shadow-lg"

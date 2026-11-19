@@ -1,8 +1,9 @@
 import { isSharedProject, type Note, type Scope } from '@devnotes/core'
-import { ClipboardPaste, Copy, Menu, TriangleAlert, UserPlus } from 'lucide-react'
+import { ClipboardPaste, Copy, Menu, Search, TriangleAlert, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { CopyForAiDialog } from '../features/ai-copy/CopyForAiDialog'
 import { PasteFromAiDialog } from '../features/ai-import/PasteFromAiDialog'
+import { LabelFilterChips } from '../features/labels/LabelFilterChips'
 import { Board } from '../features/board/Board'
 import { ViewSwitch } from '../features/board/ViewSwitch'
 import { DeleteToast } from '../features/notes/DeleteToast'
@@ -17,6 +18,7 @@ import { SessionBanner } from '../features/sync/SessionBanner'
 import { strings } from '../i18n'
 import { useActions, useApp, useProjects, useVisibleNotes } from '../store/hooks'
 import { useSessionStore } from '../store/sessionContext'
+import { MenuButton, type MenuItem } from '../ui/MenuButton'
 import { iconButtonClass, secondaryButtonClass } from '../ui/styles'
 import { navigate, scopeKey, useScope } from './router'
 import { Sidebar } from './Sidebar'
@@ -48,6 +50,9 @@ export function AppShell() {
   /** The notes the "Copy for AI" dialog was opened with; null when it is closed. */
   const [aiNotes, setAiNotes] = useState<Note[] | null>(null)
   const [pasting, setPasting] = useState(false)
+  /** On a phone the search field opens from an icon in the header. */
+  const [searchOpen, setSearchOpen] = useState(false)
+  const query = useApp((state) => state.query)
   const actions = useActions()
   const view = useApp((state) => state.view)
   const selectedIds = useApp((state) => state.selectedIds)
@@ -87,6 +92,34 @@ export function AppShell() {
 
   const canShare = session !== null && project?.role === 'owner' && !project.unavailable
 
+  const headerActions: MenuItem[] = [
+    {
+      label: strings.aiImport.button,
+      icon: <ClipboardPaste aria-hidden="true" size={18} />,
+      onSelect: () => {
+        setPasting(true)
+      },
+    },
+    {
+      label: strings.aiCopy.button,
+      icon: <Copy aria-hidden="true" size={18} />,
+      onSelect: () => {
+        setAiNotes(notesForAi())
+      },
+    },
+    ...(canShare
+      ? [
+          {
+            label: strings.share.button,
+            icon: <UserPlus aria-hidden="true" size={18} />,
+            onSelect: () => {
+              setSharing(true)
+            },
+          },
+        ]
+      : []),
+  ]
+
   const closeMenu = () => {
     setMenuOpen(false)
   }
@@ -109,7 +142,7 @@ export function AppShell() {
 
       <div className="min-w-0 flex-1">
         <header className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 pt-4 pb-4 md:px-8 md:pt-6">
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1 max-md:w-full">
             <button
               type="button"
               aria-label={strings.nav.openMenu}
@@ -121,24 +154,46 @@ export function AppShell() {
             >
               <Menu size={22} />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 max-md:flex-1">
               <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
                 {scopeTitle(scope, project?.name)}
               </h1>
               {view === 'board' && scope.kind !== 'review' && (
-                <p className="text-sm text-fg-muted">{strings.board.hint}</p>
+                <p className="text-sm text-fg-muted max-md:hidden">{strings.board.hint}</p>
               )}
             </div>
+            <button
+              type="button"
+              aria-label={strings.search.open}
+              title={strings.search.open}
+              aria-expanded={searchOpen || query !== ''}
+              onClick={() => {
+                setSearchOpen(!searchOpen)
+              }}
+              className={`${iconButtonClass} md:hidden`}
+            >
+              <Search size={20} />
+            </button>
+            <div className="-mr-2.5 md:hidden">
+              <MenuButton label={strings.nav.moreActions} items={headerActions} />
+            </div>
           </div>
-          <SearchField />
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
-            <ViewSwitch />
+          <div
+            className={`w-full sm:max-w-sm ${searchOpen || query !== '' ? '' : 'max-md:hidden'}`}
+          >
+            <SearchField autoFocus={searchOpen} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 max-md:contents lg:ml-auto">
+            {/* On a phone the switch is a bar at the bottom of the screen. */}
+            <div className="max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-20 max-md:border-t max-md:border-divider max-md:bg-page max-md:px-4 max-md:pt-2 max-md:pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+              <ViewSwitch className="max-md:w-full" />
+            </div>
             <button
               type="button"
               onClick={() => {
                 setPasting(true)
               }}
-              className={`${secondaryButtonClass} gap-2`}
+              className={`${secondaryButtonClass} gap-2 max-md:hidden`}
             >
               <ClipboardPaste aria-hidden="true" size={18} />
               {strings.aiImport.button}
@@ -148,7 +203,7 @@ export function AppShell() {
               onClick={() => {
                 setAiNotes(notesForAi())
               }}
-              className={`${secondaryButtonClass} gap-2`}
+              className={`${secondaryButtonClass} gap-2 max-md:hidden`}
             >
               <Copy aria-hidden="true" size={18} />
               {strings.aiCopy.button}
@@ -159,7 +214,7 @@ export function AppShell() {
                 onClick={() => {
                   setSharing(true)
                 }}
-                className={`${secondaryButtonClass} gap-2`}
+                className={`${secondaryButtonClass} gap-2 max-md:hidden`}
               >
                 <UserPlus aria-hidden="true" size={18} />
                 {strings.share.button}
@@ -195,6 +250,7 @@ export function AppShell() {
               defaultProjectId={scope.kind === 'project' ? scope.projectId : null}
             />
           )}
+          {scope.kind !== 'review' && <LabelFilterChips />}
           {scope.kind !== 'review' &&
             (view === 'board' ? <Board scope={scope} /> : <NoteGrid scope={scope} />)}
         </main>

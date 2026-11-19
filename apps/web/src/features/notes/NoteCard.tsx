@@ -5,6 +5,7 @@ import { strings } from '../../i18n'
 import { useActions, useApp } from '../../store/hooks'
 import { LabelBadge } from '../../ui/LabelBadge'
 import { StatusPill } from '../../ui/StatusPill'
+import { touchTargetClass } from '../../ui/styles'
 import { NOTE_SURFACE } from '../../ui/theme'
 import { BodyPreview } from './BodyPreview'
 import { formatNoteDate } from './formatDate'
@@ -147,6 +148,7 @@ export function NoteCard({ note, projectName, labels, now, variant = 'grid' }: N
             </span>
             <OpenButton
               onOpen={open}
+              fitTouch={false}
               className="absolute top-1/2 right-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             />
           </span>
@@ -168,7 +170,19 @@ export function NoteCard({ note, projectName, labels, now, variant = 'grid' }: N
   )
 }
 
-function OpenButton({ onOpen, className }: { onOpen: () => void; className: string }) {
+/**
+ * `fitTouch` widens the tap area to 44 px; not on the board, where the button sits
+ * on top of the date and a tap on the card opens it anyway.
+ */
+function OpenButton({
+  onOpen,
+  className,
+  fitTouch = true,
+}: {
+  onOpen: () => void
+  className: string
+  fitTouch?: boolean
+}) {
   return (
     <button
       type="button"
@@ -179,7 +193,7 @@ function OpenButton({ onOpen, className }: { onOpen: () => void; className: stri
       onPointerDown={(event) => {
         event.stopPropagation()
       }}
-      className={`shrink-0 rounded-sm font-sans text-[13px] font-semibold text-accent underline underline-offset-2 ${className}`}
+      className={`${fitTouch ? touchTargetClass : ''} shrink-0 rounded-sm font-sans text-[13px] font-semibold text-accent underline underline-offset-2 ${className}`}
     >
       {strings.note.open}
     </button>

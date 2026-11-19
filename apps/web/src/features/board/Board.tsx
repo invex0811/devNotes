@@ -14,7 +14,8 @@ import {
   type KeyboardCoordinateGetter,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import { useMemo, useState, type ReactNode } from 'react'
+import { GripVertical } from 'lucide-react'
+import { useMemo, useState, type KeyboardEventHandler, type ReactNode } from 'react'
 import { strings } from '../../i18n'
 import { useActions, useLabels, useProjectName, useVisibleNotes } from '../../store/hooks'
 import { STATUS_SOLID, STATUS_TEXT } from '../../ui/theme'
@@ -186,20 +187,35 @@ function BoardColumn({ status, notes, dragging, renderCard }: BoardColumnProps) 
   )
 }
 
+/**
+ * The mouse and a finger drag the whole card. From the keyboard a separate move
+ * button picks it up (it shows on focus), so the card keeps its own buttons and
+ * the list stays a plain list.
+ */
 function DraggableCard({ note, children }: { note: Note; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: note.id,
     attributes: { roleDescription: strings.board.label },
   })
+  const { onKeyDown, ...pointerListeners } = listeners ?? {}
+  const title = note.title === '' ? strings.note.untitled : note.title
   return (
     <li
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      aria-label={note.title || strings.note.untitled}
-      className={`touch-manipulation rounded-card ${isDragging ? 'opacity-40' : ''}`}
+      {...pointerListeners}
+      className={`relative touch-manipulation rounded-card ${isDragging ? 'opacity-40' : ''}`}
     >
       {children}
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        {...attributes}
+        onKeyDown={onKeyDown as KeyboardEventHandler | undefined}
+        aria-label={`${strings.board.move}: ${title}`}
+        className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-control bg-panel text-fg-secondary opacity-0 focus-visible:opacity-100"
+      >
+        <GripVertical aria-hidden="true" size={16} />
+      </button>
     </li>
   )
 }
