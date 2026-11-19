@@ -30,8 +30,11 @@ describe('projects', () => {
     await user.type(nav.getByRole('textbox', { name: strings.project.nameLabel }), '  {Enter}')
 
     expect(await nav.findByRole('alert')).toHaveTextContent(strings.project.errors.empty)
-    // All, inbox, review, archive and the two projects: no new project appeared.
-    expect(nav.getAllByRole('link')).toHaveLength(6)
+    // Still the two projects of the sample data: no new project appeared.
+    const projectLinks = nav
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('#/project/'))
+    expect(projectLinks).toHaveLength(2)
   })
 
   it('renames a project', async () => {

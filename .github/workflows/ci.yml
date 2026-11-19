@@ -48,6 +48,19 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_API_KEY: ${{ vars.VITE_GOOGLE_API_KEY }}
           VITE_GOOGLE_APP_ID: ${{ vars.VITE_GOOGLE_APP_ID }}
+          # Shows the install command on the "Connect Claude Code" page.
+          VITE_DEVNOTES_MCP: ${{ vars.DEVNOTES_MCP_CLIENT_ID != '' && '1' || '' }}
+
+      # The MCP server package that the "Connect Claude Code" page offers. The desktop
+      # OAuth client is built into it; Google does not treat its secret as
+      # confidential. See docs/MCP.md.
+      - name: Pack MCP server for download
+        working-directory: packages/mcp
+        run: node build.mjs release ../../apps/web/dist
+        env:
+          DEVNOTES_MCP_SERVER_URL: ${{ steps.pages.outputs.base_url && format('{0}/devnotes-mcp/server.mjs', steps.pages.outputs.base_url) || 'https://example.invalid/devnotes-mcp/server.mjs' }}
+          DEVNOTES_MCP_CLIENT_ID: ${{ vars.DEVNOTES_MCP_CLIENT_ID }}
+          DEVNOTES_MCP_CLIENT_SECRET: ${{ vars.DEVNOTES_MCP_CLIENT_SECRET }}
 
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
