@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeProjects, validateProjectName, type Project } from './project'
+import { activeProjects, isSharedProject, validateProjectName, type Project } from './project'
 
 const base: Project = {
   id: 'a',
@@ -25,5 +25,13 @@ describe('projects', () => {
       { ...base, id: 'b', order: 1 },
     ]
     expect(activeProjects(projects).map((p) => p.id)).toEqual(['b', 'c'])
+  })
+})
+
+describe('shared projects', () => {
+  it('treats a member project and a shared own project as shared', () => {
+    expect(isSharedProject(base)).toBe(false)
+    expect(isSharedProject({ ...base, shared: true })).toBe(true)
+    expect(isSharedProject({ ...base, role: 'member' })).toBe(true)
   })
 })

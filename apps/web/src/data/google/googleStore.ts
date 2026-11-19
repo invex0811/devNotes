@@ -1,5 +1,7 @@
 import {
+  PROJECT_NAME_MAX_LENGTH,
   labelKey,
+  readMeta,
   labelToRecord,
   noteToRecord,
   projectSpreadsheetTitle,
@@ -13,6 +15,24 @@ import type { GoogleApi } from './api'
 import type { CacheDb, QueuedOp } from './cache'
 import type { SyncEngine } from './sync'
 
+/** What connecting a shared project ended with. */
+export type ConnectResult =
+  | { project: Project; alreadyListed: boolean }
+  /** The picked spreadsheet is not a DevNotes project. */
+  | { error: 'notProject' }
+
+/** DataStore on Google Sheets, plus what only Google can do. */
+export interface GoogleDataStore extends DataStore {
+  /** Adds a project spreadsheet the user picked in Google Picker to the list. */
+  connectProject(spreadsheetId: string): Promise<ConnectResult>
+}
+
+/** The project name from its `meta` sheet; "DevNotes" when it is missing. */
+function projectName(name: string | undefined): string {
+  const trimmed = name?.trim() ?? ''
+  return trimmed === '' ? 'DevNotes' : trimmed.slice(0, PROJECT_NAME_MAX_LENGTH)
+}
+
 export interface GoogleStoreDeps {
   api: GoogleApi
   db: CacheDb
@@ -25,7 +45,7 @@ export interface GoogleStoreDeps {
  * DataStore on Google Sheets. Every change goes to the IndexedDB cache at once and
  * then to the write queue; the SyncEngine sends the queue and reads the sheets back.
  */
-export function createGoogleStore(deps: GoogleStoreDeps): DataStore {
+export function createGoogleStore(deps: GoogleStoreDeps): GoogleDataStore {
   const { api, db, engine } = deps
   const newId = deps.newId ?? (() => crypto.randomUUID())
   const now = deps.now ?? (() => new Date().toISOString())
@@ -170,9 +190,55 @@ export function createGoogleStore(deps: GoogleStoreDeps): DataStore {
 
     updateProject: (project) =>
       write(async () => {
+        const before = await db.projects.get(project.id)
+        await db.projects.put(project)
+        const ops = [projectOp(project)]
+        const renamed = before !== undefined && before.name !== project.name
+        if (renamed && project.role === 'owner' && !project.unavailable) {
+          // The owner's rename also reaches the project spreadsheet: its meta and file name.
+          ops.push({
+            spreadsheetId: project.spreadsheetId,
+            sheet: 'meta',
+            key: 'name',
+            record: { key: 'name', value: project.name },
+            coalesce: `${project.spreadsheetId}|meta|name`,
+          })
+          api
+            .renameSpreadsheet(project.spreadsheetId, projectSpreadsheetTitle(project.name))
+            .catch((error: unknown) => {
+              console.error('DevNotes: cannot rename the project spreadsheet', error)
+            })
+        }
+        await engine.enqueue(ops)
+      }),
+
+    async connectProject(spreadsheetId) {
+      const [metaRows = []] = await api.getValues(spreadsheetId, ['meta'])
+      const meta = readMeta(metaRows)
+      if (meta.get('kind') !== 'project') return { error: 'notProject' }
+
+      const projects = await db.projects.toArray()
+      const existing = projects.find((project) => project.spreadsheetId === spreadsheetId)
+      if (existing && !existing.removed) return { project: existing, alreadyListed: true }
+
+      const project: Project = existing
+        ? { ...existing, removed: false }
+        : {
+            id: newId(),
+            name: projectName(meta.get('name')),
+            spreadsheetId,
+            role: 'member',
+            order: projects.reduce((max, other) => Math.max(max, other.order), -1) + 1,
+            addedAt: now(),
+            removed: false,
+            shared: true,
+          }
+      await write(async () => {
         await db.projects.put(project)
         await engine.enqueue([projectOp(project)])
-      }),
+      })
+      return { project, alreadyListed: false }
+    },
   }
 
   async function putNote(note: Note): Promise<void> {

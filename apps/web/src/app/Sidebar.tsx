@@ -4,13 +4,15 @@ import {
   countLabel,
   countStatuses,
   isSameLabel,
+  isSharedProject,
   type Label,
   type Project,
   type Scope,
 } from '@devnotes/core'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil, Plus, TriangleAlert, Users } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { LabelDialog } from '../features/labels/LabelDialog'
+import { ConnectProjectButton } from '../features/projects/ConnectProjectButton'
 import { NewProjectForm } from '../features/projects/NewProjectForm'
 import { ProjectDialog } from '../features/projects/ProjectDialog'
 import { AccountPanel } from '../features/sync/AccountPanel'
@@ -43,6 +45,8 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
   const statusFilter = useApp((state) => state.statusFilter)
   const labelFilter = useApp((state) => state.labelFilter)
   const session = useSessionStore()
+  // Fixed when the session is created: the Picker keys are in the build or not.
+  const canConnect = session?.getState().canConnect ?? false
 
   const [editedProject, setEditedProject] = useState<Project | null>(null)
   const [editedLabel, setEditedLabel] = useState<Label | null>(null)
@@ -82,7 +86,11 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
       <ul className="space-y-0.5">
         {projects.map((project) => (
           <li key={project.id} className="group relative">
-            {scopeLink({ kind: 'project', projectId: project.id }, project.name)}
+            {scopeLink(
+              { kind: 'project', projectId: project.id },
+              project.name,
+              <ProjectMarks project={project} />,
+            )}
             <button
               type="button"
               aria-label={`${strings.project.settings}: ${project.name}`}
@@ -104,6 +112,16 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
             }}
           />
         </li>
+        {canConnect && (
+          <li>
+            <ConnectProjectButton
+              onConnected={(projectId) => {
+                navigate({ kind: 'project', projectId })
+                onNavigate()
+              }}
+            />
+          </li>
+        )}
       </ul>
 
       <h2 className={`${sectionTitleClass} mt-6 mb-1.5`}>{strings.nav.status}</h2>
@@ -218,5 +236,24 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
         />
       )}
     </nav>
+  )
+}
+
+/** Icons after a project name: shared, or its spreadsheet is unavailable. */
+function ProjectMarks({ project }: { project: Project }) {
+  if (project.unavailable) {
+    return (
+      <span title={strings.project.unavailable} className="shrink-0 text-status-wip">
+        <TriangleAlert size={14} aria-hidden="true" />
+        <span className="sr-only">{strings.project.unavailable}</span>
+      </span>
+    )
+  }
+  if (!isSharedProject(project)) return null
+  return (
+    <span title={strings.project.shared} className="shrink-0 text-fg-muted">
+      <Users size={14} aria-hidden="true" />
+      <span className="sr-only">{strings.project.shared}</span>
+    </span>
   )
 }

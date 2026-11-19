@@ -1,10 +1,16 @@
 import { HOME_SPREADSHEET_TITLE } from '@devnotes/core'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createAppStore, type AppStore } from '../../store/appStore'
-import { AuthError, TransientError, type GoogleAccount, type GoogleApi } from './api'
+import {
+  AuthError,
+  GoogleHttpError,
+  TransientError,
+  type GoogleAccount,
+  type GoogleApi,
+} from './api'
 import { KV, readCachedSession, type CacheDb } from './cache'
 import { TokenRequestError, type TokenFailure, type TokenSource } from './gis'
-import { createGoogleStore } from './googleStore'
+import { createGoogleStore, type GoogleDataStore } from './googleStore'
 import { SyncEngine, type SyncEngineOptions, type SyncStatus } from './sync'
 
 /** Why signing in or renewing the session failed, in terms the interface explains. */
@@ -16,6 +22,17 @@ export type SignInError = TokenFailure | 'network' | 'otherAccount' | 'failed'
  */
 export type AuthState = 'none' | 'ok' | 'expired'
 
+/** Why "Share" failed. */
+export type ShareError = 'invalidEmail' | 'network' | 'auth' | 'failed'
+
+/** How "Connect a shared project" ended; `null` when the user closed the Picker. */
+export type ConnectOutcome =
+  | { projectId: string; alreadyListed: boolean }
+  | { error: 'notProject' | 'unreadable' | 'network' | 'auth' | 'failed' }
+  | null
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 export interface SessionActions {
   /** Opens the app from the cache, or the sign-in page when there is none. */
   start: () => Promise<void>
@@ -25,6 +42,12 @@ export interface SessionActions {
   renew: () => void
   /** Sends the queue and reads all spreadsheets again. */
   refresh: () => Promise<void>
+  /** Re-reads one project's spreadsheet (an open shared project, every minute). */
+  refreshProject: (projectId: string) => Promise<void>
+  /** Gives a Google account edit access to the project spreadsheet. */
+  shareProject: (projectId: string, email: string) => Promise<ShareError | null>
+  /** Opens Google Picker and adds the picked project spreadsheet to the list. */
+  connectProject: () => Promise<ConnectOutcome>
   hasPending: () => Promise<boolean>
   /** Revokes the token, clears the local cache and reloads the page. */
   signOut: () => Promise<void>
@@ -37,6 +60,8 @@ export interface SessionState {
   auth: AuthState
   sync: SyncStatus
   refreshing: boolean
+  /** Google Picker is set up (API key and project number), so shared projects can be connected. */
+  canConnect: boolean
   account: GoogleAccount | null
   busy: boolean
   error: SignInError | null
@@ -52,6 +77,8 @@ export interface SessionDeps {
   db: CacheDb
   reload: () => void
   engineOptions?: Partial<SyncEngineOptions>
+  /** Shows Google Picker and resolves with the picked spreadsheet id; absent without keys. */
+  pickSpreadsheet?: (token: string) => Promise<string | null>
   /** Re-read the spreadsheets when the tab comes back, at most this often. */
   refreshOnFocusAfterMs?: number
 }
@@ -72,6 +99,7 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
   const { tokens, api, db } = deps
   const focusDelay = deps.refreshOnFocusAfterMs ?? 15_000
   let engine: SyncEngine | null = null
+  let googleStore: GoogleDataStore | null = null
   let started = false
   let lastRefresh = 0
 
@@ -85,6 +113,7 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
         set({ sync, ...(sync === 'auth' && get().auth === 'ok' ? { auth: 'expired' } : {}) })
       })
       const dataStore = createGoogleStore({ api, db, engine: current })
+      googleStore = dataStore
       set({
         phase: 'app',
         auth,
@@ -134,6 +163,17 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
       } finally {
         set({ refreshing: false })
       }
+    }
+
+    /** Sorts an error of a Google action; an expired session also shows the banner. */
+    const actionError = (error: unknown): 'auth' | 'network' | 'failed' => {
+      if (error instanceof AuthError) {
+        set({ auth: 'expired' })
+        return 'auth'
+      }
+      if (error instanceof TransientError) return 'network'
+      console.error('DevNotes: Google request failed', error)
+      return 'failed'
     }
 
     const listen = () => {
@@ -209,6 +249,64 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
 
       refresh: sync,
 
+      async refreshProject(projectId) {
+        if (!engine || get().auth !== 'ok') return
+        try {
+          await engine.refresh(projectId)
+        } catch {
+          // Shown by the indicator.
+        }
+      },
+
+      async shareProject(projectId, email) {
+        const address = email.trim()
+        if (!EMAIL.test(address)) return 'invalidEmail'
+        const project = get()
+          .appStore?.getState()
+          .projects.find((candidate) => candidate.id === projectId)
+        if (!project) return 'failed'
+        try {
+          await api.shareSpreadsheet(project.spreadsheetId, address)
+        } catch (error) {
+          return actionError(error)
+        }
+        void sync()
+        return null
+      },
+
+      async connectProject() {
+        const token = tokens.getToken()
+        if (!token) {
+          set({ auth: 'expired' })
+          return { error: 'auth' }
+        }
+        if (!deps.pickSpreadsheet || !googleStore || !engine) return { error: 'failed' }
+        let spreadsheetId: string | null
+        try {
+          spreadsheetId = await deps.pickSpreadsheet(token)
+        } catch (error) {
+          return { error: actionError(error) }
+        }
+        if (!spreadsheetId) return null
+
+        let result: Awaited<ReturnType<GoogleDataStore['connectProject']>>
+        try {
+          result = await googleStore.connectProject(spreadsheetId)
+        } catch (error) {
+          if (error instanceof GoogleHttpError) return { error: 'unreadable' }
+          return { error: actionError(error) }
+        }
+        if ('error' in result) return result
+
+        await engine.flushNow()
+        try {
+          await engine.refresh(result.project.id)
+        } catch {
+          // Shown by the indicator; the project is in the list either way.
+        }
+        return { projectId: result.project.id, alreadyListed: result.alreadyListed }
+      },
+
       async hasPending() {
         return (await engine?.hasPending()) ?? false
       },
@@ -227,6 +325,7 @@ export function createGoogleSession(deps: SessionDeps): SessionStore {
       auth: 'none',
       sync: 'synced',
       refreshing: false,
+      canConnect: deps.pickSpreadsheet !== undefined,
       account: null,
       busy: false,
       error: null,

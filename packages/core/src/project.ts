@@ -12,6 +12,10 @@ export const projectSchema = z.object({
   addedAt: z.iso.datetime(),
   /** "Remove from list" hides the project in the app; the spreadsheet stays on Drive. */
   removed: z.boolean(),
+  /** Not a sheet column: the spreadsheet is shared with other people (from Drive). */
+  shared: z.boolean().optional(),
+  /** Not a sheet column: the spreadsheet was deleted or access to it was closed. */
+  unavailable: z.boolean().optional(),
 })
 export type Project = z.infer<typeof projectSchema>
 
@@ -25,6 +29,11 @@ export function validateProjectName(name: string): ProjectNameError | null {
 }
 
 /** Projects shown in the app, in the user's order. */
+/** Shared projects get an icon in the list and are re-read every minute while open. */
+export function isSharedProject(project: Project): boolean {
+  return project.role === 'member' || project.shared === true
+}
+
 export function activeProjects(projects: readonly Project[]): Project[] {
   return projects
     .filter((project) => !project.removed)

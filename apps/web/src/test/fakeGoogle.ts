@@ -7,7 +7,12 @@ import {
   type SheetName,
   type SpreadsheetKind,
 } from '@devnotes/core'
-import type { GoogleAccount, GoogleApi, ValueRange } from '../data/google/api'
+import {
+  GoogleHttpError,
+  type GoogleAccount,
+  type GoogleApi,
+  type ValueRange,
+} from '../data/google/api'
 
 export type FakeMethod = keyof GoogleApi
 
@@ -74,6 +79,10 @@ export class FakeGoogle implements GoogleApi {
   }
   readonly spreadsheets = new Map<string, FakeSpreadsheet>()
   readonly calls: FakeMethod[] = []
+  /** Emails each spreadsheet was shared with. */
+  readonly permissions = new Map<string, string[]>()
+  /** Spreadsheets that were deleted or closed: reading them answers 404. */
+  readonly gone = new Set<string>()
   /** Return an error to make the next call of that method fail. */
   fail: ((method: FakeMethod) => Error | null) | null = null
   private nextId = 0
@@ -130,6 +139,9 @@ export class FakeGoogle implements GoogleApi {
 
   getValues(spreadsheetId: string, ranges: readonly string[]) {
     this.check('getValues')
+    if (this.gone.has(spreadsheetId)) {
+      return Promise.reject(new GoogleHttpError(404, 'Requested entity was not found.'))
+    }
     return Promise.resolve(
       ranges.map((range) => {
         const area = parseRange(range)
@@ -168,6 +180,30 @@ export class FakeGoogle implements GoogleApi {
         target[r] = row
       })
     }
+    return Promise.resolve()
+  }
+
+  listProjectFiles() {
+    this.check('listProjectFiles')
+    const files = new Map<string, { shared: boolean }>()
+    for (const [id, sheet] of this.spreadsheets) {
+      if (sheet.kind === 'project' && !this.gone.has(id)) {
+        files.set(id, { shared: (this.permissions.get(id) ?? []).length > 0 })
+      }
+    }
+    return Promise.resolve(files)
+  }
+
+  shareSpreadsheet(spreadsheetId: string, email: string) {
+    this.check('shareSpreadsheet')
+    this.permissions.set(spreadsheetId, [...(this.permissions.get(spreadsheetId) ?? []), email])
+    return Promise.resolve()
+  }
+
+  renameSpreadsheet(spreadsheetId: string, title: string) {
+    this.check('renameSpreadsheet')
+    const sheet = this.spreadsheets.get(spreadsheetId)
+    if (sheet) sheet.title = title
     return Promise.resolve()
   }
 
