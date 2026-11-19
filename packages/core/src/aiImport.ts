@@ -91,11 +91,7 @@ export function extractJson(text: string): string | null {
   return firstJsonObject(text)
 }
 
-/**
- * Turns an AI answer into cards. Existing labels are matched by name without
- * regard to case (built-in ones also by `bug`, `idea`, `fix`); unknown statuses
- * become `new`; text is cut to the usual limits.
- */
+/** Turns an AI answer (any text with the JSON in it) into cards; see `normalizeAiNotes`. */
 export function parseAiImport(text: string, labels: readonly Label[]): AiImportResult {
   const json = extractJson(text)
   if (json === null) return { error: 'noJson' }
@@ -106,6 +102,16 @@ export function parseAiImport(text: string, labels: readonly Label[]): AiImportR
   } catch {
     return { error: 'invalidJson' }
   }
+  return normalizeAiNotes(data, labels)
+}
+
+/**
+ * Turns `{ notes: [...] }` from an AI into cards, the same way for the website and
+ * the MCP server. Existing labels are matched by name without regard to case
+ * (built-in ones also by `bug`, `idea`, `fix`); unknown statuses become `new`;
+ * text is cut to the usual limits.
+ */
+export function normalizeAiNotes(data: unknown, labels: readonly Label[]): AiImportResult {
   const root = aiImportSchema.safeParse(data)
   if (!root.success) return { error: 'noNotes' }
 

@@ -182,12 +182,12 @@ Vite не читает. Файл уже в `.gitignore` и в репозитор
 
 ## Позже: OAuth-клиент «Desktop app» для MCP-сервера
 
-Понадобится перед этапом 6, сейчас этот шаг можно пропустить.
+Нужен только для MCP-сервера для Claude Code, подробно — в [MCP.md](MCP.md).
 
 1. https://console.cloud.google.com/auth/clients → **Create client**.
 2. **Application type**: **Desktop app**, **Name**: `DevNotes MCP`.
 3. **Create**. Client ID и Client secret этого клиента не кладите ни в `.env.local`
-   сайта, ни в GitHub; куда их положить, будет написано в `docs/MCP.md`.
+   сайта, ни в GitHub; куда их положить, написано в [MCP.md](MCP.md).
 
 ## Проверка перед этапом 2
 
