@@ -1,13 +1,20 @@
-import { strings } from '../i18n'
-import { AppShell } from './AppShell'
+import { useState } from 'react'
+import { createDemoData } from '../data/demoData'
+import { createMemoryStore } from '../data/memoryStore'
+import { createAppStore } from '../store/appStore'
+import { AppRoot } from './AppRoot'
+import { isDemoMode } from './router'
+import { Welcome } from './Welcome'
 
 export function App() {
-  return (
-    <AppShell title={strings.shell.allNotes}>
-      <section className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center">
-        <p className="text-base font-semibold text-fg">{strings.shell.emptyTitle}</p>
-        <p className="mt-2 text-sm text-fg-muted">{strings.shell.emptyHint}</p>
-      </section>
-    </AppShell>
+  if (!isDemoMode(window.location.search)) return <Welcome />
+  return <DemoApp />
+}
+
+/** `?demo=1`: the whole app on top of an in-memory store with sample notes. */
+function DemoApp() {
+  const [store] = useState(() =>
+    createAppStore({ dataStore: createMemoryStore({ initial: createDemoData(new Date()) }) }),
   )
+  return <AppRoot store={store} />
 }
