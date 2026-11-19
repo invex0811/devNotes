@@ -9,7 +9,7 @@ import {
   type Project,
   type Scope,
 } from '@devnotes/core'
-import { Pencil, Plus, TriangleAlert, Users } from 'lucide-react'
+import { Pencil, Plus, SquareTerminal, TriangleAlert, Users } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { LabelDialog } from '../features/labels/LabelDialog'
 import { ConnectProjectButton } from '../features/projects/ConnectProjectButton'
@@ -29,7 +29,7 @@ import { useSessionStore } from '../store/sessionContext'
 import { Logo } from '../ui/Logo'
 import { sectionTitleClass } from '../ui/styles'
 import { STATUS_SOLID, TAG_SOLID } from '../ui/theme'
-import { navigate, scopeHref, scopeKey } from './router'
+import { CLAUDE_CODE_HREF, navigate, scopeHref, scopeKey, useIsClaudeCodePage } from './router'
 
 const rowClass =
   'flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-left text-[15px] text-fg hover:bg-card'
@@ -53,6 +53,7 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
   const statusFilter = useApp((state) => state.statusFilter)
   const labelFilter = useApp((state) => state.labelFilter)
   const session = useSessionStore()
+  const onClaudeCodePage = useIsClaudeCodePage()
   // Fixed when the session is created: the Picker keys are in the build or not.
   const canConnect = session?.getState().canConnect ?? false
 
@@ -223,6 +224,15 @@ export function Sidebar({ scope, onNavigate }: SidebarProps) {
       </ul>
 
       <div className="mt-auto pt-6">
+        <a
+          href={CLAUDE_CODE_HREF}
+          aria-current={onClaudeCodePage ? 'page' : undefined}
+          onClick={onNavigate}
+          className={`${rowClass} mb-3 text-fg-secondary ${onClaudeCodePage ? activeRowClass : ''}`}
+        >
+          <SquareTerminal aria-hidden="true" size={18} />
+          {strings.claudeCode.link}
+        </a>
         {session ? (
           <AccountPanel />
         ) : (

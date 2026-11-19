@@ -11,6 +11,7 @@ import { NoteDialog } from '../features/notes/NoteDialog'
 import { NoteGrid } from '../features/notes/NoteGrid'
 import { ShareDialog } from '../features/projects/ShareDialog'
 import { QuickAdd } from '../features/quick-add/QuickAdd'
+import { ClaudeCodePage } from '../features/claude-code/ClaudeCodePage'
 import { ReviewPage } from '../features/review/ReviewPage'
 import { SearchField } from '../features/search/SearchField'
 import { SelectionBar } from '../features/selection/SelectionBar'
@@ -20,7 +21,7 @@ import { useActions, useApp, useProjects, useVisibleNotes } from '../store/hooks
 import { useSessionStore } from '../store/sessionContext'
 import { MenuButton, type MenuItem } from '../ui/MenuButton'
 import { iconButtonClass, secondaryButtonClass } from '../ui/styles'
-import { navigate, scopeKey, useScope } from './router'
+import { navigate, scopeKey, useIsClaudeCodePage, useScope } from './router'
 import { Sidebar } from './Sidebar'
 
 const SHARED_REFRESH_MS = 60_000
@@ -43,6 +44,7 @@ function scopeTitle(scope: Scope, projectName: string | undefined): string {
 /** Page frame: sidebar, header with search, quick input and the notes. */
 export function AppShell() {
   const scope = useScope()
+  const claudeCodePage = useIsClaudeCodePage()
   const projects = useProjects()
   const [menuOpen, setMenuOpen] = useState(false)
   const session = useSessionStore()
@@ -156,7 +158,7 @@ export function AppShell() {
             </button>
             <div className="min-w-0 max-md:flex-1">
               <h1 className="truncate text-2xl font-bold tracking-tight text-fg">
-                {scopeTitle(scope, project?.name)}
+                {claudeCodePage ? strings.claudeCode.title : scopeTitle(scope, project?.name)}
               </h1>
               {view === 'board' && scope.kind !== 'review' && (
                 <p className="text-sm text-fg-muted max-md:hidden">{strings.board.hint}</p>
@@ -243,15 +245,17 @@ export function AppShell() {
               </div>
             </section>
           )}
-          {scope.kind === 'review' && <ReviewPage />}
-          {scope.kind !== 'archive' && scope.kind !== 'review' && (
+          {claudeCodePage && <ClaudeCodePage />}
+          {!claudeCodePage && scope.kind === 'review' && <ReviewPage />}
+          {!claudeCodePage && scope.kind !== 'archive' && scope.kind !== 'review' && (
             <QuickAdd
               key={scopeKey(scope)}
               defaultProjectId={scope.kind === 'project' ? scope.projectId : null}
             />
           )}
-          {scope.kind !== 'review' && <LabelFilterChips />}
-          {scope.kind !== 'review' &&
+          {!claudeCodePage && scope.kind !== 'review' && <LabelFilterChips />}
+          {!claudeCodePage &&
+            scope.kind !== 'review' &&
             (view === 'board' ? <Board scope={scope} /> : <NoteGrid scope={scope} />)}
         </main>
       </div>

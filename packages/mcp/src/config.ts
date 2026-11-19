@@ -41,12 +41,25 @@ async function readJson(path: string): Promise<Record<string, unknown> | null> {
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
 /**
- * Client ID and secret from `DEVNOTES_GOOGLE_CLIENT_ID` and
- * `DEVNOTES_GOOGLE_CLIENT_SECRET`, otherwise from `config.json` in the settings folder.
+ * The site's desktop client, put into the package that the site offers for
+ * download (`build.mjs release`). Development builds and tests have none.
+ */
+export const BUILT_IN_CREDENTIALS: ClientCredentials | null = (() => {
+  const clientId = typeof __DEVNOTES_CLIENT_ID__ === 'string' ? __DEVNOTES_CLIENT_ID__.trim() : ''
+  const clientSecret =
+    typeof __DEVNOTES_CLIENT_SECRET__ === 'string' ? __DEVNOTES_CLIENT_SECRET__.trim() : ''
+  return clientId === '' ? null : { clientId, clientSecret }
+})()
+
+/**
+ * Client ID and secret, first found of: `DEVNOTES_GOOGLE_CLIENT_ID` and
+ * `DEVNOTES_GOOGLE_CLIENT_SECRET`, `config.json` in the settings folder, the
+ * client built into the downloaded package.
  */
 export async function readCredentials(
   dir: string,
   env: NodeJS.ProcessEnv = process.env,
+  builtIn: ClientCredentials | null = BUILT_IN_CREDENTIALS,
 ): Promise<ClientCredentials | null> {
   const fromEnv = {
     clientId: text(env.DEVNOTES_GOOGLE_CLIENT_ID),
@@ -55,8 +68,8 @@ export async function readCredentials(
   if (fromEnv.clientId !== '') return fromEnv
   const file = await readJson(join(dir, CONFIG_FILE))
   const clientId = text(file?.clientId)
-  if (clientId === '') return null
-  return { clientId, clientSecret: text(file?.clientSecret) }
+  if (clientId !== '') return { clientId, clientSecret: text(file?.clientSecret) }
+  return builtIn
 }
 
 export interface SavedLogin {

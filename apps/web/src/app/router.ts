@@ -59,3 +59,15 @@ export function useScope(): Scope {
 export function isDemoMode(search: string): boolean {
   return new URLSearchParams(search).get('demo') === '1'
 }
+
+/** The "Connect Claude Code" page lives at its own address, outside note scopes. */
+export const CLAUDE_CODE_HREF = '#/claude-code'
+
+export function isClaudeCodePage(hash: string): boolean {
+  return hash.replace(/^#\/?/, '') === 'claude-code'
+}
+
+export function useIsClaudeCodePage(): boolean {
+  const hash = useSyncExternalStore(subscribe, () => window.location.hash)
+  return isClaudeCodePage(hash)
+}

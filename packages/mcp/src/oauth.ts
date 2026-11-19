@@ -20,6 +20,25 @@ export class LoginRequiredError extends Error {
   override name = 'LoginRequiredError'
 }
 
+/** There is no OAuth client at all: neither built in, nor in settings. */
+export class SetupRequiredError extends Error {
+  override name = 'SetupRequiredError'
+}
+
+/** A browser sign-in was just started; the user should finish it and ask again. */
+export class SignInStartedError extends Error {
+  override name = 'SignInStartedError'
+  /** The sign-in address, in case the browser did not open; empty when unknown. */
+  readonly url: string
+  constructor(url: string) {
+    super('Sign-in started in the browser')
+    this.url = url
+  }
+}
+
+/** How long a started sign-in waits for the user. */
+const SIGN_IN_TIMEOUT_MS = 10 * 60_000
+
 const base64url = (data: Buffer) => data.toString('base64url')
 
 interface TokenResponse {
@@ -92,6 +111,10 @@ export async function login(
       if (ok) resolve(value)
       else reject(new Error(error ?? 'The sign-in answer did not match the request'))
     })
+    const timer = setTimeout(() => {
+      reject(new Error('Nobody finished the sign-in in time'))
+    }, SIGN_IN_TIMEOUT_MS)
+    timer.unref()
   })
 
   const authUrl = `${AUTH_URL}?${new URLSearchParams({

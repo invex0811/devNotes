@@ -2,7 +2,7 @@ import { NOTE_STATUSES, type Note } from '@devnotes/core'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { GoogleError } from './google'
-import { LoginRequiredError } from './oauth'
+import { LoginRequiredError, SetupRequiredError, SignInStartedError } from './oauth'
 import {
   DEFAULT_LIST_LIMIT,
   MAX_CREATE,
@@ -11,7 +11,7 @@ import {
   type DevNotesStore,
 } from './store'
 
-/** Gives the store, or throws LoginRequiredError when the user has not signed in. */
+/** Gives the store, or throws a sign-in error from ./oauth when it cannot. */
 export type StoreSource = () => Promise<DevNotesStore>
 
 const EXCERPT_LENGTH = 280
@@ -57,9 +57,17 @@ async function answer(work: () => Promise<unknown>) {
     return json(await work())
   } catch (error) {
     let message: string
-    if (error instanceof LoginRequiredError) {
+    if (error instanceof SignInStartedError) {
       message =
-        'The DevNotes MCP server is not signed in to Google. Ask the user to run `devnotes-mcp login` (node packages/mcp/dist/index.js login) in a terminal, then retry.'
+        'The DevNotes MCP server needs the user to sign in to Google once. A browser window has been opened: ask the user to sign in there with their own Google account, allow access to DevNotes, and then repeat the request.' +
+        (error.url ? ` If no window opened, the user can open this address: ${error.url}` : '')
+    } else if (error instanceof LoginRequiredError) {
+      message =
+        "The DevNotes MCP server's Google sign-in has expired or was revoked." +
+        ' Ask the user to run `devnotes-mcp logout` and then `devnotes-mcp login` in a terminal (or delete token.json in the settings folder and retry), then repeat the request.'
+    } else if (error instanceof SetupRequiredError) {
+      message =
+        'The DevNotes MCP server has no Google OAuth client. Install it with the command from the "Подключить Claude Code" page of the DevNotes website, or follow docs/MCP.md to set up config.json.'
     } else if (error instanceof UserError) {
       message = error.message
     } else if (error instanceof GoogleError) {

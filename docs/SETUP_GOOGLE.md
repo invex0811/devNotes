@@ -197,7 +197,9 @@ Vite не читает. Файл в `.gitignore` и в репозиторий н
 ## MCP-сервер для Claude Code (по желанию)
 
 Ему нужен ещё один OAuth-клиент, типа «Desktop app», в этом же проекте Google Cloud.
-Всё про него — в [MCP.md](MCP.md).
+Заведите его Client ID и secret как переменные репозитория `DEVNOTES_MCP_CLIENT_ID` и
+`DEVNOTES_MCP_CLIENT_SECRET` — тогда на сайте появится страница «Подключить Claude Code»
+с командой для любого пользователя. Подробно — в [MCP.md](MCP.md).
 
 ## Если что-то не работает
 
