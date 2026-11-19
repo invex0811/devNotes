@@ -1,8 +1,38 @@
-// Placeholder entry point. The MCP server itself is built at stage 6 of the spec;
-// this file only keeps the workspace wired into lint and type checks until then.
-import { SCHEMA_VERSION } from '@devnotes/core'
+import { runCheck, runLogin, runLogout } from './cli'
+import { runServer } from './server'
 
-process.stderr.write(
-  `DevNotes MCP server is not implemented yet (data schema v${String(SCHEMA_VERSION)}).\n`,
+/**
+ * devnotes-mcp — the DevNotes MCP server for Claude Code.
+ *
+ *   devnotes-mcp          serve MCP over stdio (what Claude Code runs)
+ *   devnotes-mcp login    sign in with Google in the browser
+ *   devnotes-mcp logout   revoke and delete the saved sign-in
+ *   devnotes-mcp check    check that the spreadsheets of the website are visible
+ */
+const commands: Record<string, () => Promise<number>> = {
+  '': runServer,
+  serve: runServer,
+  login: runLogin,
+  logout: runLogout,
+  check: runCheck,
+}
+
+async function main(): Promise<number> {
+  const name = process.argv[2] ?? ''
+  const command = commands[name]
+  if (!command) {
+    process.stderr.write('Команды: devnotes-mcp [serve] | login | logout | check\n')
+    return 1
+  }
+  return command()
+}
+
+main().then(
+  (code) => {
+    process.exitCode = code
+  },
+  (error: unknown) => {
+    process.stderr.write(`Ошибка: ${error instanceof Error ? error.message : String(error)}\n`)
+    process.exitCode = 1
+  },
 )
-process.exitCode = 1

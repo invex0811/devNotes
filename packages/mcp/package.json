@@ -4,12 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@devnotes/core": "*"
+    "@devnotes/core": "*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^24.19.2"
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "vitest": "^5.1.1"
+  },
+  "bin": {
+    "devnotes-mcp": "dist/index.js"
   }
 }
